@@ -14,3 +14,19 @@ counts = Counter(p.parent.name for p in all_images)
 print("\nImages by folder:")
 for cls, n in sorted(counts.items()):
     print(f"{cls}: {n}")
+
+"""output:
+Total images found: 36777
+
+Images by folder:
+battery: 2268
+biological: 2097
+cardboard: 4233
+clothes: 5676
+glass: 5208
+metal: 2790
+paper: 4008
+plastic: 4791
+shoes: 4347
+trash: 1359
+"""

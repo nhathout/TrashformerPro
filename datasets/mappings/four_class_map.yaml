@@ -1,0 +1,16 @@
+# source: https://www.redhat.com/en/blog/yaml-beginners
+plastic: 
+  - plastic
+
+paper_cardboard: 
+  - paper
+  - cardboard
+
+metal_glass:
+  - metal
+  - glass
+
+trash_other:
+  - trash
+  - biological
+  - battery

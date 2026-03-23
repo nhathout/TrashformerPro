@@ -26,4 +26,4 @@ pip install --upgrade pip
 echo "[6/6] Pi setup complete."
 echo "Next:"
 echo "  source .venv/bin/activate"
-echo "  bash scripts/pi/test_camera.sh"
+echo "  bash scripts/pi/test_cam.sh"

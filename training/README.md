@@ -1,18 +1,8 @@
 # Training Workflow
 
-## Recommendation
+This document is only about model training and dataset preparation.
 
-Train on the Windows 4080 PC first.
-
-That is the fastest path to a usable baseline because:
-
-- you control the environment
-- you can debug failures quickly
-- a single 4080 is more than enough for the first transfer-learning run
-
-Use BU SCC after the baseline works locally and you want cleaner report runs, seed sweeps, or model comparisons.
-
-Do not train on the Raspberry Pi. Use the Pi only for image capture and inference.
+If you want to run the trained model on the Raspberry Pi, use `inference/README.md` instead.
 
 ## Current Baseline
 
@@ -32,26 +22,25 @@ The first baseline in this repo is:
 - early stopping patience: `5`
 - seed: `42`
 
-## Repo Files You Will Use
+## Files You Will Use
 
 - `training/windows/setup_windows_gpu.ps1`
 - `training/windows/train_baseline.ps1`
+- `training/prepare_dataset.py`
+- `training/train_classifier.py`
+- `training/verify_environment.py`
 - `training/scc/setup_scc_env.sh`
 - `training/scc/run_baseline.sh`
 - `training/scc/train_baseline.qsub`
-- `training/verify_environment.py`
-- `training/prepare_dataset.py`
-- `training/train_classifier.py`
 
 ## Shared Prerequisites
 
-Before training on either machine:
+Before training on any machine:
 
 1. Make sure the repo exists on that machine.
 2. Make sure Garbage V2 exists at `data/raw/garbage_v2`.
-3. Use only one dataset variant for training. This repo defaults to `standardized_256`.
-4. Keep your large files in an appropriate location.
-   On SCC, use `/projectnb/...`, not your home directory.
+3. Use one dataset variant at a time. This repo defaults to `standardized_256`.
+4. Keep large training artifacts in appropriate storage for that machine.
 
 You can confirm the dataset layout with:
 
@@ -59,43 +48,46 @@ You can confirm the dataset layout with:
 python scripts/inspect_garbage_dataset.py --variant standardized_256
 ```
 
+## Prepare The Dataset Manifests
+
+From the repo root:
+
+```bash
+python training/prepare_dataset.py --variant standardized_256 --seed 42
+```
+
+This creates:
+
+- `datasets/manifests/four_class/standardized_256/train.csv`
+- `datasets/manifests/four_class/standardized_256/val.csv`
+- `datasets/manifests/four_class/standardized_256/test.csv`
+- `datasets/manifests/four_class/standardized_256/summary.json`
+
 ## Windows 4080 PC
 
 ### One-Time Setup
 
-1. Install:
-   - Git
-   - Python 3.10 to 3.13
-   - the latest NVIDIA driver for the 4080
+Install:
 
-2. Put the repo in a simple local path such as:
+- Git
+- Python 3.10 to 3.13
+- the latest NVIDIA driver for the RTX 4080
 
-```powershell
-C:\dev\TrashformerPro
-```
-
-3. Open PowerShell in the repo root and run:
-
-```powershell
-.\training\windows\setup_windows_gpu.ps1
-```
-
-What this does:
-
-- creates `.venv-win`
-- installs `torch==2.6.0` and `torchvision==0.21.0` from the official PyTorch CUDA 12.6 wheel index
-- installs the repo’s remaining Python dependency from `training/requirements.txt`
-- verifies that CUDA is visible to PyTorch
-
-If PowerShell script execution is blocked, run this in that shell first:
+Then, from the repo root in PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
+.\training\windows\setup_windows_gpu.ps1 -PythonLauncher python3.13.exe
 ```
 
-### Verify The Environment
+What the setup script does:
 
-You can rerun the verification anytime:
+- creates `.venv-win`
+- installs `torch==2.6.0` and `torchvision==0.21.0` from the CUDA 12.6 wheel index
+- installs `training/requirements.txt`
+- verifies that CUDA is visible to PyTorch
+
+You can rerun the environment check any time with:
 
 ```powershell
 .\.venv-win\Scripts\python.exe .\training\verify_environment.py --expect-device cuda
@@ -104,10 +96,10 @@ You can rerun the verification anytime:
 You want to see:
 
 - `cuda_available: True`
-- a detected NVIDIA GPU
-- a selected device of `cuda`
+- your NVIDIA GPU in the detected device list
+- `selected_device: cuda`
 
-### Run The First Baseline
+### Train The Baseline
 
 From the repo root:
 
@@ -118,10 +110,10 @@ From the repo root:
 That script:
 
 1. verifies the CUDA environment
-2. regenerates the dataset manifests with seed `42`
+2. regenerates the manifests with seed `42`
 3. trains the baseline model on `standardized_256`
 
-### If You Want The Manual Command
+### Manual Training Command
 
 ```powershell
 .\.venv-win\Scripts\python.exe .\training\prepare_dataset.py --variant standardized_256 --seed 42
@@ -138,9 +130,9 @@ That script:
   --seed 42
 ```
 
-### Expected Outputs
+### Training Outputs
 
-Each run writes a new folder under `training/runs/`, for example:
+Each run writes a timestamped folder under `training/runs/`, for example:
 
 ```text
 training/runs/20260402_194500_mobilenet_v3_large/
@@ -156,24 +148,27 @@ Important artifacts:
 - `test_metrics.json`
 - `test_confusion_matrix.json`
 
-### What To Do After The Windows Run
+## What To Do After Training
 
-1. Look at validation/test accuracy and macro F1.
-2. Inspect the confusion matrix.
-3. Copy `best.pt` to the Raspberry Pi.
-4. Run `inference/pi/classify_image.py` on real Pi captures.
-5. If the baseline is decent, move to SCC for comparison runs.
+After the first baseline works, the recommended next step is Pi validation, not more experiments.
+
+1. Copy `best.pt` to the Raspberry Pi.
+2. Run inference on real plate captures.
+3. Review the failure cases from the real hardware setup.
+4. Fine-tune later on those real captures if needed.
+
+See `inference/README.md` for the Pi-side workflow.
 
 ## BU SCC
 
-### Why SCC Comes Second
+SCC is optional and comes second.
 
-Use SCC once:
+Use it when:
 
-- the baseline command already works on the 4080 PC
-- you want report-quality reruns
-- you want to compare `mobilenet_v3_large`, `mobilenet_v3_small`, and `efficientnet_b0`
+- the Windows baseline already works
+- you want repeatable comparison runs
 - you want multiple seeds or longer sweeps
+- you need a cleaner environment for report-quality reruns
 
 ### One-Time SCC Setup
 
@@ -199,42 +194,17 @@ What this does:
 
 - loads the requested BU Python module
 - creates `/projectnb/<project>/venvs/trashformerpro-cu126`
-- installs `torch==2.6.0` and `torchvision==0.21.0` from the official PyTorch CUDA 12.6 wheel index
-- installs the repo’s remaining dependency
+- installs `torch==2.6.0` and `torchvision==0.21.0`
+- installs the remaining repo dependency
 - verifies that the environment imports correctly
 
-Note:
+### Submit The SCC Baseline
 
-- the login node usually does not have a GPU attached, so setup only checks imports there
-- the actual CUDA check happens inside the GPU batch job
-
-### Configure The Batch Script
-
-Edit `training/scc/train_baseline.qsub` and set:
-
-- `PROJECT_ROOT`
-- `VENV_PATH`
-- optionally `PYTHON_MODULE`
-
-The defaults are placeholders. Do not submit until those paths are correct for your SCC account.
-
-### Submit The First SCC Run
-
-From the repo root on SCC:
+Edit `training/scc/train_baseline.qsub` so its project-specific paths are correct, then submit:
 
 ```bash
 qsub training/scc/train_baseline.qsub
 ```
-
-That batch script calls `training/scc/run_baseline.sh`, which:
-
-1. loads the Python module
-2. activates the SCC virtual environment
-3. verifies CUDA from inside the GPU job
-4. regenerates the manifests
-5. trains the baseline model
-
-### Track The Job
 
 Useful SCC commands:
 
@@ -243,9 +213,7 @@ qstat -u $USER
 qacct -j <job_id>
 ```
 
-### If You Want A Manual SCC Run Instead Of `qsub`
-
-First request an interactive GPU shell if needed, then:
+### Manual SCC Training Command
 
 ```bash
 module load python3/3.10.12
@@ -265,32 +233,11 @@ python training/train_classifier.py \
   --seed 42
 ```
 
-Use `128` batch size on SCC only if it fits the GPU you requested. If not, reduce it to `64`.
+Reduce the batch size if the requested SCC GPU cannot hold `128`.
 
-## Exact Order I Recommend Right Now
+## Training Metadata Checklist
 
-1. Put the repo and dataset on the Windows 4080 PC.
-2. Run `training/windows/setup_windows_gpu.ps1`.
-3. Run `training/windows/train_baseline.ps1`.
-4. Review the outputs in `training/runs/...`.
-5. Copy `best.pt` to the Raspberry Pi and test real captures.
-6. Only after that, set up SCC with `training/scc/setup_scc_env.sh`.
-7. Submit the same baseline on SCC with `qsub training/scc/train_baseline.qsub`.
-8. After the baseline is stable, run comparison experiments on SCC.
-
-## Suggested SCC Follow-Up Experiments
-
-Once the baseline works:
-
-1. `mobilenet_v3_small` for faster Pi inference.
-2. `efficientnet_b0` for an accuracy comparison.
-3. three seeds: `42`, `52`, `62`.
-4. longer training only if validation accuracy is still improving late.
-5. fine-tuning on your own clear-plate images.
-
-## Final Report Checklist
-
-Record these for every experiment you may cite:
+Record these for any experiment you may want to keep or report:
 
 - Git commit hash
 - date and machine used
@@ -313,6 +260,4 @@ Record these for every experiment you may cite:
 - test accuracy
 - macro F1
 - confusion matrix
-- real Pi-image failure cases
-
-`training/train_classifier.py` now records machine, framework, device, and Git metadata in each run’s `config.json`.
+- real Pi failure cases from downstream validation

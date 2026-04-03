@@ -1,4 +1,25 @@
 data/raw/
 data/processed/
-.DS_Store
+
+# Generated runtime artifacts
+runtime/captures/
+runtime/inference_records/
+runtime/logs/
+runtime/experiments/
+runtime/tmp/
+runtime/models/
+
+# Training outputs and local environments
+training/runs/
 .venv/
+.venv-win/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Local editor metadata
+.vscode/
+.idea/
+
+.DS_Store

@@ -8,17 +8,32 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+function Invoke-CheckedCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [Parameter()]
+        [string[]]$Arguments = @()
+    )
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code ${LASTEXITCODE}: $FilePath $($Arguments -join ' ')"
+    }
+}
+
+$repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCommandPath))
 Set-Location $repoRoot
 
-& $PythonLauncher -m venv $VenvPath
+Invoke-CheckedCommand $PythonLauncher @("-m", "venv", $VenvPath)
 
 $pythonExe = Join-Path $repoRoot "$VenvPath\Scripts\python.exe"
 
-& $pythonExe -m pip install --upgrade pip
-& $pythonExe -m pip install "torch==$TorchVersion" "torchvision==$TorchVisionVersion" --index-url $TorchIndexUrl
-& $pythonExe -m pip install -r "training\requirements.txt"
-& $pythonExe "training\verify_environment.py" --expect-device cuda
+Invoke-CheckedCommand $pythonExe @("-m", "pip", "install", "--upgrade", "pip")
+Invoke-CheckedCommand $pythonExe @("-m", "pip", "install", "torch==$TorchVersion", "torchvision==$TorchVisionVersion", "--index-url", $TorchIndexUrl)
+Invoke-CheckedCommand $pythonExe @("-m", "pip", "install", "-r", "training\requirements.txt")
+Invoke-CheckedCommand $pythonExe @("training\verify_environment.py", "--expect-device", "cuda")
 
 Write-Host ""
 Write-Host "Windows GPU environment ready."

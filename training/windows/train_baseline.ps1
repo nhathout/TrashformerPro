@@ -12,7 +12,22 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+function Invoke-CheckedCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [Parameter()]
+        [string[]]$Arguments = @()
+    )
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code ${LASTEXITCODE}: $FilePath $($Arguments -join ' ')"
+    }
+}
+
+$repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCommandPath))
 Set-Location $repoRoot
 
 $pythonExe = Join-Path $repoRoot "$VenvPath\Scripts\python.exe"
@@ -20,8 +35,8 @@ if (-not (Test-Path $pythonExe)) {
     throw "Python executable not found at $pythonExe. Run training\windows\setup_windows_gpu.ps1 first."
 }
 
-& $pythonExe "training\verify_environment.py" --expect-device cuda
-& $pythonExe "training\prepare_dataset.py" --variant $Variant --seed $Seed
+Invoke-CheckedCommand $pythonExe @("training\verify_environment.py", "--expect-device", "cuda")
+Invoke-CheckedCommand $pythonExe @("training\prepare_dataset.py", "--variant", $Variant, "--seed", $Seed)
 
 $trainArgs = @(
     "training\train_classifier.py",
@@ -40,4 +55,4 @@ if ($RunName -ne "") {
     $trainArgs += @("--run-name", $RunName)
 }
 
-& $pythonExe @trainArgs
+Invoke-CheckedCommand $pythonExe $trainArgs

@@ -1,0 +1,99 @@
+{
+  "created_at_utc": "2026-04-02T23:46:20.528629+00:00",
+  "variant": "standardized_256",
+  "source_root": "data/raw/garbage_v2",
+  "mapping_path": "datasets/mappings/four_class_map.yaml",
+  "seed": 42,
+  "ratios": {
+    "train": 0.7,
+    "val": 0.15,
+    "test": 0.15
+  },
+  "target_classes": [
+    "metal_glass",
+    "paper_cardboard",
+    "plastic",
+    "trash_other"
+  ],
+  "overall_source_counts": {
+    "battery": 756,
+    "biological": 699,
+    "cardboard": 1411,
+    "clothes": 1892,
+    "glass": 1736,
+    "metal": 930,
+    "paper": 1336,
+    "plastic": 1597,
+    "shoes": 1449,
+    "trash": 453
+  },
+  "overall_target_counts": {
+    "metal_glass": 2666,
+    "paper_cardboard": 2747,
+    "plastic": 1597,
+    "trash_other": 5249
+  },
+  "split_counts": {
+    "train": 8578,
+    "val": 1833,
+    "test": 1848
+  },
+  "split_target_counts": {
+    "train": {
+      "metal_glass": 1866,
+      "paper_cardboard": 1922,
+      "plastic": 1117,
+      "trash_other": 3673
+    },
+    "val": {
+      "metal_glass": 399,
+      "paper_cardboard": 411,
+      "plastic": 239,
+      "trash_other": 784
+    },
+    "test": {
+      "metal_glass": 401,
+      "paper_cardboard": 414,
+      "plastic": 241,
+      "trash_other": 792
+    }
+  },
+  "split_source_counts": {
+    "train": {
+      "battery": 529,
+      "biological": 489,
+      "cardboard": 987,
+      "clothes": 1324,
+      "glass": 1215,
+      "metal": 651,
+      "paper": 935,
+      "plastic": 1117,
+      "shoes": 1014,
+      "trash": 317
+    },
+    "val": {
+      "battery": 113,
+      "biological": 104,
+      "cardboard": 211,
+      "clothes": 283,
+      "glass": 260,
+      "metal": 139,
+      "paper": 200,
+      "plastic": 239,
+      "shoes": 217,
+      "trash": 67
+    },
+    "test": {
+      "battery": 114,
+      "biological": 106,
+      "cardboard": 213,
+      "clothes": 285,
+      "glass": 261,
+      "metal": 140,
+      "paper": 201,
+      "plastic": 241,
+      "shoes": 218,
+      "trash": 69
+    }
+  }
+}

@@ -1,8 +1,12 @@
-# source: https://www.redhat.com/en/blog/yaml-beginners
-plastic: 
+# TrashformerPro four-bin mapping.
+# Assumption for the current prototype:
+# clothes and shoes fall into the catch-all bin because the hardware only
+# supports four compartments and there is no dedicated textile/shoe path.
+
+plastic:
   - plastic
 
-paper_cardboard: 
+paper_cardboard:
   - paper
   - cardboard
 
@@ -14,3 +18,5 @@ trash_other:
   - trash
   - biological
   - battery
+  - clothes
+  - shoes

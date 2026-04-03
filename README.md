@@ -71,16 +71,6 @@ python inference/pi/classify_image.py \
 
 For the full modeling workflow and report checklist, see `training/README.md`.
 
-## Recommended Next Step
-
-Do not start the tilt mechanism yet. The correct next stage is:
-
-1. finalize the four-class label mapping
-2. create a reproducible split from Garbage V2
-3. train and evaluate a lightweight transfer-learning baseline
-4. test that checkpoint on real Raspberry Pi captures
-5. only then integrate classification with hardware control
-
 ## Files Present So Far
 - `scripts/pi/setup_pi.sh`: Raspberry Pi bootstrap script for package install, virtual environment setup, and runtime directory creation.
 - `scripts/pi/test_cam.sh`: quick shell smoke test for the connected Pi Camera.

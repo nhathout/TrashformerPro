@@ -6,7 +6,7 @@ sudo apt update
 sudo apt full-upgrade -y
 
 echo "[2/7] Installing basic dependencies..."
-sudo apt install -y git python3-venv python3-opencv
+sudo apt install -y git python3-venv python3-opencv python3-gpiozero python3-serial
 
 echo "[3/7] Creating local runtime directories..."
 mkdir -p runtime/captures
@@ -33,3 +33,4 @@ echo "Next:"
 echo "  source .venv/bin/activate"
 echo "  pip install torch torchvision"
 echo "  bash scripts/pi/test_cam.sh"
+echo "  python3 scripts/pi/test_leds.py"

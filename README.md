@@ -77,6 +77,7 @@ The dataset is expected under `data/raw/garbage_v2`.
 ## Repo Guide
 
 - `README.md`: project overview and quick starts
+- `docs/hardware/README.md`: Raspberry Pi 5 wiring and non-motor hardware bring-up
 - `inference/README.md`: Raspberry Pi capture and inference workflow
 - `training/README.md`: dataset prep, Windows training, and optional SCC usage
 - `inference/pi/`: Pi capture and inference scripts

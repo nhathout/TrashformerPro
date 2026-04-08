@@ -79,6 +79,7 @@ The dataset is expected under `data/raw/garbage_v2`.
 - `README.md`: project overview and quick starts
 - `docs/hardware/README.md`: Raspberry Pi 5 wiring and non-motor hardware bring-up
 - `inference/README.md`: Raspberry Pi capture and inference workflow
+- `scripts/pi/README.md`: Pi quick start for setup, hardware tests, and moving captures back to a laptop
 - `training/README.md`: dataset prep, Windows training, and optional SCC usage
 - `inference/pi/`: Pi capture and inference scripts
 - `training/`: model training, dataset manifest prep, and environment checks

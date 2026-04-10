@@ -13,10 +13,18 @@ runtime/models/
 training/runs/
 .venv/
 .venv-win/
+.venv-trashformer/
 
 # Python caches
 __pycache__/
 *.pyc
+
+# Trashformer app local artifacts
+apps/trashformer_app/frontend/node_modules/
+apps/trashformer_app/frontend/dist/
+apps/trashformer_app/backend/data/db/*.db
+apps/trashformer_app/screenshots/
+trashformer_app.zip
 
 # Local editor metadata
 .vscode/

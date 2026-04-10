@@ -1,0 +1,198 @@
+{
+  "react_icons": [
+    {
+      "brand": "PyTorch",
+      "export_name": "SiPytorch",
+      "usage": "tech_stack_chip",
+      "reason": "Official framework logo"
+    },
+    {
+      "brand": "Python",
+      "export_name": "SiPython",
+      "usage": "tech_stack_chip",
+      "reason": "Primary development language"
+    },
+    {
+      "brand": "NVIDIA",
+      "export_name": "SiNvidia",
+      "usage": "hardware_chip",
+      "reason": "AI acceleration provider"
+    },
+    {
+      "brand": "Raspberry Pi",
+      "export_name": "SiRaspberrypi",
+      "usage": "hardware_chip",
+      "reason": "Deployment platform"
+    }
+  ],
+  "downloaded_assets": [
+    {
+      "id": "hero-sorting-facility",
+      "kind": "photo",
+      "filename": "hero-sorting-facility.jpg",
+      "title": "Modern Waste Sorting Facility",
+      "description": "High-tech automated recycling bins at a facility",
+      "visual_description": "Row of colorful recycling bins (blue, red, yellow, green) in a clean, brightly lit industrial/indoor environment. The focus is on the sorting categories and technology.",
+      "color_notes": "Bright primary colors against a neutral concrete background. Pairs well with both light and green/dark themes.",
+      "mood": "Professional, clean, organized",
+      "placement": "hero",
+      "recommended": true,
+      "alt_text": "Row of colorful recycling bins in a modern facility",
+      "dimensions": "1200x600",
+      "provider": "Pexels",
+      "verified_via": "read_image",
+      "why_it_was_chosen": "Perfectly captures the sorting aspect of the app with a clean, high-tech look."
+    },
+    {
+      "id": "hero-smart-bins",
+      "kind": "photo",
+      "filename": "hero-smart-bins.jpg",
+      "title": "Smart City Recycling Bins",
+      "description": "Futuristic smart recycling bins in an urban setting",
+      "visual_description": "Yellow and green recycling bins against a minimalist white wall in a bright urban environment.",
+      "color_notes": "High contrast between vibrant yellow/green and neutral white/gray.",
+      "mood": "Minimalist, sustainable, urban",
+      "placement": "hero",
+      "recommended": false,
+      "alt_text": "Yellow and green recycling bins against a white wall",
+      "dimensions": "1200x600",
+      "provider": "Pexels",
+      "verified_via": "file_size_check_only",
+      "why_it_was_chosen": "Good alternative for a more minimalist 'smart city' aesthetic."
+    },
+    {
+      "id": "card-plastic-bottle",
+      "kind": "photo",
+      "filename": "card-plastic-bottle.jpg",
+      "title": "Plastic Waste Category",
+      "description": "Crumpled plastic bottle representing plastic waste",
+      "visual_description": "Close-up of a hand holding a crumpled clear plastic bottle against a clean light background.",
+      "color_notes": "Neutral gray and white tones.",
+      "mood": "Focused, educational",
+      "placement": "category_card",
+      "recommended": true,
+      "alt_text": "A person holding a crumpled plastic bottle",
+      "dimensions": "600x400",
+      "provider": "Pexels",
+      "verified_via": "read_image",
+      "why_it_was_chosen": "Clear, high-quality representation of the plastic category."
+    },
+    {
+      "id": "card-cardboard-box",
+      "kind": "photo",
+      "filename": "card-cardboard-box.jpg",
+      "title": "Paper/Cardboard Waste Category",
+      "description": "Minimalist cardboard box for paper waste category",
+      "visual_description": "Single clean brown kraft cardboard box on a plain light surface.",
+      "color_notes": "Warm cardboard brown and neutral grays.",
+      "mood": "Minimalist, clean",
+      "placement": "category_card",
+      "recommended": true,
+      "alt_text": "Brown cardboard box on a clean surface",
+      "dimensions": "600x400",
+      "provider": "Pexels",
+      "verified_via": "file_size_check_only",
+      "why_it_was_chosen": "Clean and professional category icon."
+    },
+    {
+      "id": "card-glass-bottle",
+      "kind": "photo",
+      "filename": "card-glass-bottle.jpg",
+      "title": "Glass Waste Category",
+      "description": "Green glass bottles for glass recycling category",
+      "visual_description": "Collection of recyclable green glass bottles in a container.",
+      "color_notes": "Deep forest green and olive tones.",
+      "mood": "Sustainable, earthy",
+      "placement": "category_card",
+      "recommended": true,
+      "alt_text": "Recyclable green glass bottles in a bin",
+      "dimensions": "600x400",
+      "provider": "Pexels",
+      "verified_via": "file_size_check_only",
+      "why_it_was_chosen": "Strong visual indicator for glass recycling."
+    },
+    {
+      "id": "card-organic-waste",
+      "kind": "photo",
+      "filename": "card-organic-waste.jpg",
+      "title": "Organic Waste Category",
+      "description": "Compostable organic waste and food scraps",
+      "visual_description": "Close-up of food scraps and organic waste being added to a green compost bin.",
+      "color_notes": "Earthy browns, vibrant greens.",
+      "mood": "Sustainable, natural",
+      "placement": "category_card",
+      "recommended": true,
+      "alt_text": "Adding organic waste to a compost bin",
+      "dimensions": "600x400",
+      "provider": "Pexels",
+      "verified_via": "read_image",
+      "why_it_was_chosen": "Authentic representation of composting/organic waste."
+    },
+    {
+      "id": "bg-mesh-texture",
+      "kind": "photo",
+      "filename": "bg-mesh-texture.jpg",
+      "title": "Dark Mesh Texture",
+      "description": "Subtle dark patterned surface for card backgrounds",
+      "visual_description": "Macro shot of a dark net or mesh surface, creating a subtle geometric pattern.",
+      "color_notes": "Deep blacks and charcoal grays.",
+      "mood": "Technical, professional",
+      "placement": "card_background",
+      "recommended": true,
+      "alt_text": "Close-up of a dark mesh surface",
+      "dimensions": "800x600",
+      "provider": "Pexels",
+      "verified_via": "file_size_check_only",
+      "why_it_was_chosen": "Adds technical depth to card surfaces without being distracting."
+    },
+    {
+      "id": "logo-nvidia",
+      "kind": "downloaded_logo",
+      "filename": "logo-nvidia.png",
+      "title": "NVIDIA Logo",
+      "placement": "brand_row",
+      "recommended": true,
+      "provider": "get_logos"
+    },
+    {
+      "id": "logo-raspberrypi",
+      "kind": "downloaded_logo",
+      "filename": "logo-raspberrypi.png",
+      "title": "Raspberry Pi Logo",
+      "placement": "brand_row",
+      "recommended": true,
+      "provider": "get_logos"
+    },
+    {
+      "id": "logo-trashformer",
+      "kind": "downloaded_logo",
+      "filename": "logo-trashformer.svg",
+      "title": "TrashFormer App Logo",
+      "visual_description": "Green leaf icon representing sustainability and growth",
+      "placement": "navbar_logo",
+      "recommended": true,
+      "provider": "SimpleIcons"
+    }
+  ],
+  "missing_assets": [],
+  "css_textures": [
+    {
+      "class_name": "bg-dot-grid",
+      "placement": "hero_background",
+      "description": "Subtle dot pattern for a technical AI/Engineering look",
+      "recommended_for": "Main hero container background"
+    },
+    {
+      "class_name": "bg-mesh",
+      "placement": "page_background",
+      "description": "Soft radial gradients for a modern dark mode wash",
+      "recommended_for": "Body background"
+    }
+  ],
+  "usage_notes": [
+    "The hero-sorting-facility is the best pick for the landing page hero.",
+    "Use the bg-mesh-texture at low opacity (10-20%) as a background-image for feature cards.",
+    "For the app logo, logo-trashformer.svg provides a clean sustainability-themed leaf mark.",
+    "Hardware and library logos are provided for the 'Powered By' or 'Technology' sections."
+  ]
+}

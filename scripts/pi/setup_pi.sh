@@ -10,6 +10,7 @@ sudo apt install -y git python3-venv python3-opencv python3-gpiozero python3-ser
 
 echo "[3/7] Creating local runtime directories..."
 mkdir -p runtime/captures
+mkdir -p runtime/calibration
 mkdir -p runtime/inference_records/json
 mkdir -p runtime/logs
 mkdir -p runtime/experiments

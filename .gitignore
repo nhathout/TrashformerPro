@@ -3,6 +3,7 @@ data/processed/
 
 # Generated runtime artifacts
 runtime/captures/
+runtime/calibration/
 runtime/inference_records/
 runtime/logs/
 runtime/experiments/
@@ -12,6 +13,7 @@ runtime/models/
 # Training outputs and local environments
 training/runs/
 .venv/
+.venv-mac/
 .venv-win/
 .venv-trashformer/
 

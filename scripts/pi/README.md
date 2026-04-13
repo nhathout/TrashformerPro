@@ -4,6 +4,8 @@
 
 - `scripts/pi/setup_pi.sh`: installs Pi-side packages and creates runtime folders
 - `scripts/pi/test_cam.sh`: captures one camera image into `runtime/captures/`
+- `scripts/pi/capture_empty_reference.py`: captures the empty-plate reference image used by the full runner
+- `scripts/pi/full_system_runner.py`: runs the end-to-end Pi loop with capture, classification, LEDs, and buzzer output
 - `scripts/pi/test_leds.py`: cycles the four class-status LEDs
 - `scripts/pi/test_buzzer.py`: tests an active buzzer or passive piezo buzzer
 - `scripts/pi/test_esp32_serial.py`: checks USB serial communication with the ESP32
@@ -19,6 +21,7 @@ bash scripts/pi/setup_pi.sh
 That creates:
 
 - `runtime/captures/`
+- `runtime/calibration/`
 - `runtime/models/`
 - `runtime/inference_records/`
 
@@ -95,7 +98,48 @@ Default buzzer pin:
 
 - `GPIO24` / physical pin `18`
 
-### 4. ESP32 USB Serial Test
+### 4. Capture The Empty Reference
+
+Once the camera position is fixed, capture the empty plate with normal lighting:
+
+```bash
+/usr/bin/python3 scripts/pi/capture_empty_reference.py
+```
+
+That writes:
+
+```text
+runtime/calibration/empty_plate.jpg
+```
+
+### 5. Full System Runner
+
+After you have a trained checkpoint in `runtime/models/best.pt` and `torch` installed in `.venv`, run:
+
+```bash
+/usr/bin/python3 scripts/pi/full_system_runner.py \
+  --checkpoint runtime/models/best.pt \
+  --classifier-python .venv/bin/python \
+  --buzzer-mode active
+```
+
+If you have a passive piezo buzzer and want richer tone patterns:
+
+```bash
+/usr/bin/python3 scripts/pi/full_system_runner.py \
+  --checkpoint runtime/models/best.pt \
+  --classifier-python .venv/bin/python \
+  --buzzer-mode passive
+```
+
+The runner uses:
+
+- system Python for GPIO and OpenCV
+- `.venv/bin/python` for the classifier subprocess
+
+That split keeps GPIO support simple while still letting the model run in the virtual environment that has `torch`.
+
+### 6. ESP32 USB Serial Test
 
 First list candidate serial ports:
 
@@ -170,6 +214,15 @@ python inference/pi/capture_and_classify.py \
   --device cpu
 ```
 
+For the full system loop, also capture the empty reference and then run:
+
+```bash
+/usr/bin/python3 scripts/pi/capture_empty_reference.py
+/usr/bin/python3 scripts/pi/full_system_runner.py \
+  --checkpoint runtime/models/best.pt \
+  --classifier-python .venv/bin/python
+```
+
 If you only want to capture an image inside the inference workflow without classifying yet:
 
 ```bash
@@ -187,6 +240,8 @@ Since your camera and LEDs are already connected:
 5. flash `firmware/esp32/serial_heartbeat/serial_heartbeat.ino`
 6. `/usr/bin/python3 scripts/pi/test_esp32_serial.py --list`
 7. `/usr/bin/python3 scripts/pi/test_esp32_serial.py`
-8. pull the saved image back to your laptop with `scp`
+8. train and copy `best.pt` to `runtime/models/best.pt`
+9. `/usr/bin/python3 scripts/pi/capture_empty_reference.py`
+10. `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint runtime/models/best.pt --classifier-python .venv/bin/python`
 
-That gives you camera, indicators, and USB serial confidence before you move on to model deployment.
+That gives you camera, indicators, model inference, and the end-to-end output loop before you move on to motors.

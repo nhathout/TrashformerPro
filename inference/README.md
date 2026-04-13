@@ -31,13 +31,7 @@ Then install the model runtime dependencies:
 pip install torch torchvision
 ```
 
-If your Pi image is not already configured for piwheels, retry with:
-
-```bash
-pip install torch torchvision --extra-index-url https://www.piwheels.org/simple
-```
-
-You can sanity-check the runtime with:
+Check that they installed correctly:
 
 ```bash
 python -c "import torch, torchvision; print(torch.__version__, torchvision.__version__)"
@@ -63,6 +57,8 @@ If you want to copy it over SSH from another machine, a typical command looks li
 scp <path-to-best.pt> pi@<pi-host>:~/TrashformerPro/runtime/models/best.pt
 ```
 
+If `runtime/models/best.pt` does not exist yet, you still need to train the model first. Use `training/README.md`.
+
 ## Verify The Camera
 
 Run the shell-based camera test:
@@ -72,6 +68,22 @@ bash scripts/pi/test_cam.sh
 ```
 
 That writes a test image into `runtime/captures/`.
+
+## Capture The Empty-Plate Reference
+
+The full Pi loop can detect "no object in frame" by comparing each new image against an empty-plate reference image.
+
+Capture that reference after the camera position and lighting are stable:
+
+```bash
+/usr/bin/python3 scripts/pi/capture_empty_reference.py
+```
+
+By default this writes:
+
+```text
+runtime/calibration/empty_plate.jpg
+```
 
 ## Fastest Real-World Inference Loop
 
@@ -84,7 +96,7 @@ python inference/pi/capture_and_classify.py \
   --device cpu
 ```
 
-This is the command you should treat as the default manual inference loop while bringing the hardware up.
+This is the default manual inference loop while bringing the hardware up.
 
 If you want extra camera options, repeat `--camera-arg`. Example:
 
@@ -96,9 +108,52 @@ python inference/pi/capture_and_classify.py \
   --camera-arg=1000
 ```
 
+## Full System Runtime
+
+Once manual inference looks reasonable, I'll move to the end-to-end Pi loop:
+
+```bash
+/usr/bin/python3 scripts/pi/full_system_runner.py \
+  --checkpoint runtime/models/best.pt \
+  --classifier-python .venv/bin/python \
+  --buzzer-mode active
+```
+
+With passive piezo buzzer:
+
+```bash
+/usr/bin/python3 scripts/pi/full_system_runner.py \
+  --checkpoint runtime/models/best.pt \
+  --classifier-python .venv/bin/python \
+  --buzzer-mode passive
+```
+
+Default behavior:
+
+- startup sound on boot
+- continuous image capture
+- empty-frame comparison using `runtime/calibration/empty_plate.jpg`
+- all LEDs flash when no object is present, inference fails, or confidence is below threshold
+- the predicted class LED stays on when confidence clears the threshold
+- a distinct buzzer pattern per class
+- shutdown sound on exit
+
+Useful options:
+
+- `--min-confidence 0.75`
+- `--skip-presence-check`
+- `--once`
+- `--camera-arg=--timeout --camera-arg=1000`
+
+The runner also writes event logs to:
+
+```text
+runtime/logs/full_system_events.jsonl
+```
+
 ## Classify An Existing Saved Image
 
-If you already have an image and want to classify it without taking a new capture:
+If you want to classify already-taken image without taking a new capture:
 
 ```bash
 python inference/pi/classify_image.py \
@@ -172,9 +227,10 @@ python inference/pi/capture_and_classify.py \
 2. copy `best.pt` to `runtime/models/best.pt`
 3. run `python inference/pi/capture_and_classify.py --checkpoint runtime/models/best.pt --device cpu`
 4. inspect real predictions on a handful of items
-5. start integrating the hardware mechanism
-6. keep collecting captures and prediction records while testing the full system
-7. fine-tune only after the failure cases become clear
+5. capture the empty reference with `/usr/bin/python3 scripts/pi/capture_empty_reference.py`
+6. run `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint runtime/models/best.pt --classifier-python .venv/bin/python`
+7. keep collecting captures and prediction records while testing the full system
+8. fine-tune only after the failure cases become clear
 
 ## Important Note
 
@@ -187,3 +243,5 @@ That is okay as long as:
 - the plate/background stays reasonably controlled
 
 If the hardware later needs cluttered-scene understanding, then a detection or segmentation stage may be worth adding. For the current prototype, classification-first is the right place to start.
+
+The full-system runner handles "no object in frame" with an empty-plate calibration image. That is a practical prototype heuristic, not true object detection.

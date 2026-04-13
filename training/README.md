@@ -24,6 +24,8 @@ The first baseline in this repo is:
 
 ## Files You Will Use
 
+- `training/mac/setup_mac_training.sh`
+- `training/mac/train_baseline.sh`
 - `training/windows/setup_windows_gpu.ps1`
 - `training/windows/train_baseline.ps1`
 - `training/prepare_dataset.py`
@@ -148,14 +150,86 @@ Important artifacts:
 - `test_metrics.json`
 - `test_confusion_matrix.json`
 
+## Mac
+
+Use the Mac path when you want a local baseline before moving to the Pi, or when you want to iterate without the Windows GPU machine.
+
+The Mac scripts work on:
+
+- Apple Silicon Macs with `mps`
+- Intel Macs with `cpu`
+
+### One-Time Setup
+
+From the repo root:
+
+```bash
+bash training/mac/setup_mac_training.sh
+```
+
+If you need a specific Python binary:
+
+```bash
+PYTHON_BIN=python3.13 bash training/mac/setup_mac_training.sh
+```
+
+What the setup script does:
+
+- creates `.venv-mac`
+- installs `torch==2.6.0` and `torchvision==0.21.0`
+- installs `training/requirements.txt`
+- runs the environment check
+
+### Train The Baseline
+
+From the repo root:
+
+```bash
+bash training/mac/train_baseline.sh
+```
+
+The script auto-selects the device:
+
+- `mps` when available
+- otherwise `cpu`
+
+Useful overrides:
+
+```bash
+DEVICE=mps BATCH_SIZE=32 EPOCHS=15 bash training/mac/train_baseline.sh
+DEVICE=cpu BATCH_SIZE=16 WORKERS=2 bash training/mac/train_baseline.sh
+```
+
+### Manual Mac Training Command
+
+```bash
+source .venv-mac/bin/activate
+python training/prepare_dataset.py --variant standardized_256 --seed 42
+
+python training/train_classifier.py \
+  --train-manifest datasets/manifests/four_class/standardized_256/train.csv \
+  --val-manifest datasets/manifests/four_class/standardized_256/val.csv \
+  --test-manifest datasets/manifests/four_class/standardized_256/test.csv \
+  --model mobilenet_v3_large \
+  --epochs 15 \
+  --batch-size 32 \
+  --workers 4 \
+  --device mps \
+  --seed 42
+```
+
+If your Mac does not support `mps`, switch `--device` to `cpu`.
+
 ## What To Do After Training
 
 After the first baseline works, the recommended next step is Pi validation, not more experiments.
 
 1. Copy `best.pt` to the Raspberry Pi.
 2. Run inference on real plate captures.
-3. Review the failure cases from the real hardware setup.
-4. Fine-tune later on those real captures if needed.
+3. Capture an empty reference image with `/usr/bin/python3 scripts/pi/capture_empty_reference.py`.
+4. Run the full Pi loop with `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint runtime/models/best.pt --classifier-python .venv/bin/python`.
+5. Review the failure cases from the real hardware setup.
+6. Fine-tune later on those real captures if needed.
 
 See `inference/README.md` for the Pi-side workflow.
 

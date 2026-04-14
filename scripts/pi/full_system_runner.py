@@ -15,7 +15,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from inference.pi.runtime_utils import capture_image, ensure_runtime_dirs, repo_relative, resolve_repo_path
+from inference.pi.runtime_utils import (
+    capture_image,
+    describe_checkpoint_file,
+    ensure_runtime_dirs,
+    repo_relative,
+    resolve_checkpoint_path,
+    resolve_repo_path,
+)
 from scripts.pi.hardware_config import BUZZER_GPIO_PIN, GPIO_TO_PHYSICAL_PIN, LED_GPIO_PINS
 
 DEFAULT_CLASSIFIER_PYTHON = Path(".venv/bin/python")
@@ -23,24 +30,29 @@ DEFAULT_REFERENCE_PATH = Path("runtime/calibration/empty_plate.jpg")
 DEFAULT_LOG_PATH = Path("runtime/logs/full_system_events.jsonl")
 
 PASSIVE_PATTERNS: dict[str, list[tuple[float | None, float]]] = {
-    "boot": [(523.25, 0.08), (659.25, 0.08), (783.99, 0.10), (1046.50, 0.14)],
-    "shutdown": [(1046.50, 0.08), (783.99, 0.08), (659.25, 0.10), (523.25, 0.16)],
-    "alert": [(392.00, 0.10), (None, 0.05), (329.63, 0.10), (None, 0.05), (261.63, 0.18)],
-    "plastic": [(880.00, 0.07), (1046.50, 0.07), (1318.51, 0.12)],
-    "paper_cardboard": [(587.33, 0.09), (698.46, 0.09), (880.00, 0.11)],
-    "metal_glass": [(1318.51, 0.08), (987.77, 0.08), (1567.98, 0.14)],
-    "trash_other": [(659.25, 0.08), (523.25, 0.08), (392.00, 0.12), (261.63, 0.14)],
+    # Soft startup and shutdown chimes, inspired by the calmer Windows cue style.
+    "boot": [(196.00, 0.10), (246.94, 0.10), (329.63, 0.12), (392.00, 0.22)],
+    "shutdown": [(392.00, 0.12), (329.63, 0.10), (246.94, 0.10), (196.00, 0.24)],
+    "standby": [(293.66, 0.16), (None, 0.06), (293.66, 0.10)],
+    "alert": [(233.08, 0.10), (None, 0.04), (220.00, 0.10), (None, 0.04), (196.00, 0.20)],
+    "plastic": [(329.63, 0.08), (440.00, 0.10), (554.37, 0.16)],
+    "paper_cardboard": [(261.63, 0.10), (329.63, 0.10), (392.00, 0.14)],
+    "metal_glass": [(392.00, 0.08), (523.25, 0.10), (659.25, 0.16)],
+    "trash_other": [(293.66, 0.10), (246.94, 0.10), (196.00, 0.16)],
 }
 
 ACTIVE_PATTERNS: dict[str, list[tuple[bool, float]]] = {
-    "boot": [(True, 0.06), (False, 0.04), (True, 0.06), (False, 0.04), (True, 0.12)],
-    "shutdown": [(True, 0.10), (False, 0.05), (True, 0.08), (False, 0.05), (True, 0.06)],
-    "alert": [(True, 0.10), (False, 0.05), (True, 0.10), (False, 0.05), (True, 0.18)],
-    "plastic": [(True, 0.04), (False, 0.03), (True, 0.04), (False, 0.03), (True, 0.10)],
-    "paper_cardboard": [(True, 0.08), (False, 0.04), (True, 0.08), (False, 0.04), (True, 0.08)],
-    "metal_glass": [(True, 0.03), (False, 0.03), (True, 0.03), (False, 0.03), (True, 0.12)],
-    "trash_other": [(True, 0.14), (False, 0.05), (True, 0.08), (False, 0.05), (True, 0.05)],
+    "boot": [(True, 0.08), (False, 0.05), (True, 0.08), (False, 0.05), (True, 0.14)],
+    "shutdown": [(True, 0.14), (False, 0.05), (True, 0.08), (False, 0.05), (True, 0.08)],
+    "standby": [(True, 0.06), (False, 0.12), (True, 0.04)],
+    "alert": [(True, 0.10), (False, 0.05), (True, 0.10), (False, 0.05), (True, 0.12)],
+    "plastic": [(True, 0.05), (False, 0.04), (True, 0.09)],
+    "paper_cardboard": [(True, 0.08), (False, 0.04), (True, 0.08)],
+    "metal_glass": [(True, 0.04), (False, 0.03), (True, 0.04), (False, 0.03), (True, 0.10)],
+    "trash_other": [(True, 0.12), (False, 0.05), (True, 0.06)],
 }
+
+PASSIVE_BUZZER_LEVEL = 0.28
 
 
 def import_cv2():
@@ -67,7 +79,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the full TrashformerPro Pi loop: capture, classify, LEDs, and buzzer."
     )
-    parser.add_argument("--checkpoint", type=Path, required=True, help="Path to the trained model checkpoint.")
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help="Path to the trained model checkpoint. Defaults to models/best.pt, then runtime/models/best.pt.",
+    )
     parser.add_argument(
         "--classifier-python",
         type=Path,
@@ -176,6 +193,10 @@ class HardwareController:
             time.sleep(remaining)
         led.off()
 
+    def indicate_standby(self) -> None:
+        self.all_leds_off()
+        self.play_sound("standby")
+
     def play_sound(self, sound_name: str) -> float:
         if self.buzzer_mode == "none" or self.buzzer is None:
             return 0.0
@@ -194,7 +215,7 @@ class HardwareController:
                 time.sleep(duration)
                 continue
             self.buzzer.frequency = frequency
-            self.buzzer.value = 0.5
+            self.buzzer.value = PASSIVE_BUZZER_LEVEL
             time.sleep(duration)
             self.buzzer.off()
             time.sleep(0.02)
@@ -339,9 +360,10 @@ def main() -> None:
     args = parse_args()
     ensure_runtime_dirs()
 
-    checkpoint_path = resolve_existing_path(args.checkpoint, "Checkpoint")
+    checkpoint_path = resolve_checkpoint_path(args.checkpoint)
     classifier_python = resolve_existing_path(args.classifier_python, "Classifier Python interpreter")
     empty_reference_path = resolve_repo_path(args.empty_reference)
+    checkpoint_info = describe_checkpoint_file(checkpoint_path)
 
     if not args.skip_presence_check and not empty_reference_path.exists():
         raise SystemExit(
@@ -350,7 +372,10 @@ def main() -> None:
         )
 
     print("Starting full TrashformerPro Pi loop")
-    print(f"  checkpoint: {repo_relative(checkpoint_path)}")
+    print(
+        f"  checkpoint: {checkpoint_info['checkpoint']} "
+        f"[{str(checkpoint_info['checkpoint_sha256'])[:12]}]"
+    )
     print(f"  classifier python: {repo_relative(classifier_python)}")
     if args.skip_presence_check:
         print("  presence check: disabled")
@@ -430,14 +455,13 @@ def main() -> None:
                     f" object_present={presence_result.object_present}"
                 )
                 if not presence_result.object_present:
-                    print("No object detected in frame. Triggering alert state.")
-                    controller.play_sound("alert")
-                    controller.flash_all_leds(args.alert_cycles, args.alert_cycle_seconds)
+                    print("No object detected in frame. Returning to standby state.")
+                    controller.indicate_standby()
                     log_event(
                         args.log_path,
                         build_event(
                             image_path=image_path,
-                            outcome="alert",
+                            outcome="standby",
                             reason="no_object_detected",
                             presence=presence_result,
                         ),
@@ -482,15 +506,15 @@ def main() -> None:
 
             if confidence < args.min_confidence:
                 print(
-                    f"Confidence below threshold ({confidence:.4f} < {args.min_confidence:.4f}). Triggering alert state."
+                    f"Confidence below threshold ({confidence:.4f} < {args.min_confidence:.4f}). "
+                    "Returning to standby state."
                 )
-                controller.play_sound("alert")
-                controller.flash_all_leds(args.alert_cycles, args.alert_cycle_seconds)
+                controller.indicate_standby()
                 log_event(
                     args.log_path,
                     build_event(
                         image_path=image_path,
-                        outcome="alert",
+                        outcome="standby",
                         reason="low_confidence",
                         presence=presence_result,
                         prediction=prediction,

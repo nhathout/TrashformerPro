@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--frequency",
         type=float,
-        default=880.0,
+        default=440.0,
         help="Starting frequency for passive mode.",
     )
     return parser.parse_args()
@@ -60,13 +60,13 @@ def run_active_test(Buzzer, pin: int, count: int, on_seconds: float, off_seconds
 
 def run_passive_test(PWMOutputDevice, pin: int, count: int, frequency: float, off_seconds: float) -> None:
     buzzer = PWMOutputDevice(pin, frequency=frequency)
-    tones = [frequency * ratio for ratio in (1.0, 1.25, 1.5, 2.0)]
+    tones = [frequency * ratio for ratio in (0.75, 1.0, 1.25, 1.5)]
     try:
         for index in range(count):
             target_frequency = tones[index % len(tones)]
             print(f"Tone {index + 1}/{count} at {target_frequency:.1f} Hz")
             buzzer.frequency = target_frequency
-            buzzer.value = 0.5
+            buzzer.value = 0.28
             time.sleep(0.25)
             buzzer.off()
             time.sleep(off_seconds)

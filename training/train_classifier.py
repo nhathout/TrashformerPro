@@ -82,6 +82,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--device", type=str, default="auto", help="auto, cuda, mps, or cpu")
     parser.add_argument("--no-pretrained", action="store_true")
+    parser.add_argument(
+        "--init-checkpoint",
+        type=Path,
+        default=None,
+        help="Optional existing TrashformerPro checkpoint to load before training for fine-tuning.",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("training/runs"))
     parser.add_argument("--run-name", type=str, default=None)
     return parser.parse_args()
@@ -302,12 +308,52 @@ def save_checkpoint(
     )
 
 
+def load_initial_checkpoint(
+    path: Path,
+    *,
+    model: nn.Module,
+    expected_model_name: str,
+    expected_class_names: list[str],
+) -> dict[str, object]:
+    checkpoint_path = path if path.is_absolute() else REPO_ROOT / path
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"Initial checkpoint does not exist: {checkpoint_path}")
+
+    payload = torch.load(checkpoint_path, map_location="cpu")
+    checkpoint_model_name = payload["model_name"]
+    checkpoint_class_names = list(payload["class_names"])
+
+    if checkpoint_model_name != expected_model_name:
+        raise ValueError(
+            f"Initial checkpoint model mismatch: expected {expected_model_name}, got {checkpoint_model_name}."
+        )
+
+    if checkpoint_class_names != expected_class_names:
+        raise ValueError(
+            "Initial checkpoint classes do not match the current manifests: "
+            f"expected {expected_class_names}, got {checkpoint_class_names}."
+        )
+
+    model.load_state_dict(payload["model_state"])
+    resolved_path = checkpoint_path.resolve()
+    try:
+        display_path = str(resolved_path.relative_to(REPO_ROOT.resolve()))
+    except ValueError:
+        display_path = str(resolved_path)
+    return {
+        "path": display_path,
+        "epoch": payload.get("epoch"),
+        "metrics": payload.get("metrics", {}),
+    }
+
+
 def main() -> None:
     args = parse_args()
     set_seed(args.seed)
 
     device = resolve_device(args.device)
-    pretrained = not args.no_pretrained
+    loading_existing_checkpoint = args.init_checkpoint is not None
+    pretrained = (not args.no_pretrained) and not loading_existing_checkpoint
 
     train_rows = read_manifest(args.train_manifest)
     val_rows = read_manifest(args.val_manifest)
@@ -346,6 +392,15 @@ def main() -> None:
     )
 
     model = build_model(args.model, len(class_names), pretrained=pretrained).to(device)
+    init_checkpoint_info: dict[str, object] | None = None
+    if args.init_checkpoint is not None:
+        init_checkpoint_info = load_initial_checkpoint(
+            args.init_checkpoint,
+            model=model,
+            expected_model_name=args.model,
+            expected_class_names=class_names,
+        )
+
     class_weights = build_class_weights(train_rows, class_names, device)
     criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=args.label_smoothing)
     optimizer = AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
@@ -377,6 +432,7 @@ def main() -> None:
         "train_examples": len(train_rows),
         "val_examples": len(val_rows),
         "test_examples": len(test_rows),
+        "init_checkpoint": init_checkpoint_info,
         "environment": collect_environment_info(device),
     }
     save_json(run_dir / "config.json", config)

@@ -114,20 +114,20 @@ runtime/calibration/empty_plate.jpg
 
 ### 5. Full System Runner
 
-After you have a trained checkpoint in `runtime/models/best.pt` and `torch` installed in `.venv`, run:
+After you have a trained checkpoint in `models/best.pt` and `torch` installed in `.venv`, run:
 
 ```bash
 /usr/bin/python3 scripts/pi/full_system_runner.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --classifier-python .venv/bin/python \
   --buzzer-mode active
 ```
 
-If you have a passive piezo buzzer and want richer tone patterns:
+If you have a passive piezo buzzer and want the softer Windows-inspired boot/shutdown chimes plus distinct category tones:
 
 ```bash
 /usr/bin/python3 scripts/pi/full_system_runner.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --classifier-python .venv/bin/python \
   --buzzer-mode passive
 ```
@@ -138,6 +138,8 @@ The runner uses:
 - `.venv/bin/python` for the classifier subprocess
 
 That split keeps GPIO support simple while still letting the model run in the virtual environment that has `torch`.
+
+At startup, the runner prints the exact checkpoint path plus a short SHA-256 prefix so you can confirm which `best.pt` file is active.
 
 ### 6. ESP32 USB Serial Test
 
@@ -196,12 +198,14 @@ If you want the whole capture folder instead of one file:
 scp -r <pi-user>@<pi-host>:~/TrashformerPro/runtime/captures ~/Downloads/trashformer_captures
 ```
 
-## Tomorrow: Bring The Model Over
+## Model Location
 
-Once you have the trained checkpoint on your laptop or PC, copy it to the Pi:
+The Pi scripts now default to `models/best.pt`, with a fallback to `runtime/models/best.pt` if needed. If you want to replace the deployed model, copy your selected checkpoint into one of those locations and pass `--checkpoint` explicitly if you want zero ambiguity.
+
+Example copy command:
 
 ```bash
-scp /path/to/best.pt <pi-user>@<pi-host>:~/TrashformerPro/runtime/models/best.pt
+scp /path/to/best.pt <pi-user>@<pi-host>:~/TrashformerPro/models/best.pt
 ```
 
 Then on the Pi:
@@ -210,7 +214,7 @@ Then on the Pi:
 source .venv/bin/activate
 pip install torch torchvision
 python inference/pi/capture_and_classify.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --device cpu
 ```
 
@@ -219,7 +223,7 @@ For the full system loop, also capture the empty reference and then run:
 ```bash
 /usr/bin/python3 scripts/pi/capture_empty_reference.py
 /usr/bin/python3 scripts/pi/full_system_runner.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --classifier-python .venv/bin/python
 ```
 
@@ -240,8 +244,41 @@ Since your camera and LEDs are already connected:
 5. flash `firmware/esp32/serial_heartbeat/serial_heartbeat.ino`
 6. `/usr/bin/python3 scripts/pi/test_esp32_serial.py --list`
 7. `/usr/bin/python3 scripts/pi/test_esp32_serial.py`
-8. train and copy `best.pt` to `runtime/models/best.pt`
+8. train and copy `best.pt` to `models/best.pt`
 9. `/usr/bin/python3 scripts/pi/capture_empty_reference.py`
-10. `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint runtime/models/best.pt --classifier-python .venv/bin/python`
+10. `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint models/best.pt --classifier-python .venv/bin/python`
 
 That gives you camera, indicators, model inference, and the end-to-end output loop before you move on to motors.
+
+## Relabel And Fine-Tune Stored Captures
+
+Every inference already saves:
+
+- the image in `runtime/captures/`
+- the prediction record in `runtime/inference_records/predictions.csv`
+
+To build a fine-tuning set from Pi mistakes:
+
+1. Open `runtime/inference_records/predictions.csv`.
+2. For each image you want to use, fill in `confirmed_label` with the true class:
+   `plastic`, `paper_cardboard`, `metal_glass`, or `trash_other`.
+3. Add optional notes in the `notes` column.
+4. Build combined manifests:
+
+```bash
+python training/prepare_runtime_feedback.py
+```
+
+5. Fine-tune from the current deployed checkpoint:
+
+```bash
+python training/train_classifier.py \
+  --train-manifest datasets/manifests/four_class/runtime_feedback/train.csv \
+  --val-manifest datasets/manifests/four_class/runtime_feedback/val.csv \
+  --test-manifest datasets/manifests/four_class/runtime_feedback/test.csv \
+  --model mobilenet_v3_large \
+  --device cpu \
+  --init-checkpoint models/best.pt
+```
+
+That keeps the original dataset in the training mix while adding the confirmed Pi captures on top.

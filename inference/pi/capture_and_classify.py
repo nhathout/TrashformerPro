@@ -17,7 +17,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Capture a fresh Raspberry Pi image, classify it, and archive both the image and prediction."
     )
-    parser.add_argument("--checkpoint", type=Path, required=True, help="Path to a .pt checkpoint from training.")
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help="Path to a .pt checkpoint from training. Defaults to models/best.pt, then runtime/models/best.pt.",
+    )
     parser.add_argument("--device", type=str, default="auto", help="auto, cuda, mps, or cpu")
     parser.add_argument("--top-k", type=int, default=4)
     parser.add_argument(

@@ -5,8 +5,8 @@ TrashformerPro is a smart trash can prototype that classifies one waste item at 
 ## Current Status
 
 - The repo already has dataset prep, model training, Pi inference, and separate hardware test scripts.
-- A trained checkpoint is not committed in this repo.
-- If `runtime/models/best.pt` is missing and `training/runs/**/best.pt` is also missing, you still need to train the classifier.
+- The repo currently includes a deployed checkpoint at `models/best.pt`.
+- If you want a newer checkpoint, train one and either overwrite `models/best.pt` or pass a different `--checkpoint` path explicitly.
 
 ## What Runs Where
 
@@ -25,7 +25,7 @@ TrashformerPro is a smart trash can prototype that classifies one waste item at 
 ## Recommended Order
 
 1. Train the first real checkpoint on the Windows 4080 PC or on your Mac.
-2. Copy `best.pt` to `runtime/models/best.pt` on the Pi.
+2. Copy `best.pt` to `models/best.pt` on the Pi.
 3. Validate manual Pi inference on a few real objects.
 4. Capture an empty-plate reference image.
 5. Run the full Pi loop with LEDs and buzzer enabled.
@@ -66,7 +66,7 @@ bash scripts/pi/setup_pi.sh
 source .venv/bin/activate
 pip install torch torchvision
 python inference/pi/capture_and_classify.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --device cpu
 ```
 
@@ -89,7 +89,7 @@ Then run the full loop:
 
 ```bash
 /usr/bin/python3 scripts/pi/full_system_runner.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --classifier-python .venv/bin/python \
   --buzzer-mode active
 ```
@@ -100,7 +100,8 @@ The full runner:
 
 - plays a startup sound on boot
 - captures images continuously
-- flashes all LEDs when no object is detected, classification fails, or confidence is too low
+- returns to a neutral standby tone when no object is detected or confidence is too low
+- flashes all LEDs only for actual runtime failures
 - lights the predicted class LED when confidence is high enough
 - plays a different buzzer pattern for each class
 - plays a shutdown sound when you stop the program
@@ -130,13 +131,14 @@ The dataset is expected under `data/raw/garbage_v2`.
 ## Practical Workflow
 
 1. Train the first baseline on the Windows 4080 PC or on your Mac.
-2. Copy `best.pt` onto the Pi, usually into `runtime/models/best.pt`.
-3. Use `python inference/pi/capture_and_classify.py --checkpoint runtime/models/best.pt --device cpu`.
+2. Copy `best.pt` onto the Pi, usually into `models/best.pt`.
+3. Use `python inference/pi/capture_and_classify.py --checkpoint models/best.pt --device cpu`.
 4. Capture the empty reference with `/usr/bin/python3 scripts/pi/capture_empty_reference.py`.
-5. Run `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint runtime/models/best.pt --classifier-python .venv/bin/python`.
+5. Run `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint models/best.pt --classifier-python .venv/bin/python`.
 6. Review real predictions and keep collecting captures.
-7. When needed, label the archived Pi captures and fine-tune on that data.
-8. Only after the on-device loop is useful, spend time on SCC sweeps or motors.
+7. Fill in `confirmed_label` in `runtime/inference_records/predictions.csv`.
+8. Run `python training/prepare_runtime_feedback.py` and fine-tune with `--init-checkpoint models/best.pt`.
+9. Only after the on-device loop is useful, spend time on SCC sweeps or motors.
 
 ## Notes
 

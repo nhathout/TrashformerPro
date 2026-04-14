@@ -29,6 +29,7 @@ The first baseline in this repo is:
 - `training/windows/setup_windows_gpu.ps1`
 - `training/windows/train_baseline.ps1`
 - `training/prepare_dataset.py`
+- `training/prepare_runtime_feedback.py`
 - `training/train_classifier.py`
 - `training/verify_environment.py`
 - `training/scc/setup_scc_env.sh`
@@ -224,14 +225,80 @@ If your Mac does not support `mps`, switch `--device` to `cpu`.
 
 After the first baseline works, the recommended next step is Pi validation, not more experiments.
 
-1. Copy `best.pt` to the Raspberry Pi.
+1. Copy `best.pt` to the Raspberry Pi, usually as `models/best.pt`.
 2. Run inference on real plate captures.
 3. Capture an empty reference image with `/usr/bin/python3 scripts/pi/capture_empty_reference.py`.
-4. Run the full Pi loop with `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint runtime/models/best.pt --classifier-python .venv/bin/python`.
+4. Run the full Pi loop with `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint models/best.pt --classifier-python .venv/bin/python`.
 5. Review the failure cases from the real hardware setup.
 6. Fine-tune later on those real captures if needed.
 
 See `inference/README.md` for the Pi-side workflow.
+
+## Fine-Tune On Confirmed Pi Captures
+
+The Pi inference workflow already archives:
+
+- every captured image in `runtime/captures/`
+- every prediction record in `runtime/inference_records/predictions.csv`
+
+To turn those into a fine-tuning set:
+
+1. Open `runtime/inference_records/predictions.csv`.
+2. Fill in `confirmed_label` for the captures you want to train on.
+3. Keep labels inside the four deployed classes:
+   `plastic`, `paper_cardboard`, `metal_glass`, `trash_other`.
+4. Optionally add notes for lighting, occlusion, or staging issues.
+5. Build combined manifests:
+
+```bash
+python training/prepare_runtime_feedback.py
+```
+
+That writes:
+
+- `datasets/manifests/four_class/runtime_feedback/feedback_all.csv`
+- `datasets/manifests/four_class/runtime_feedback/train.csv`
+- `datasets/manifests/four_class/runtime_feedback/val.csv`
+- `datasets/manifests/four_class/runtime_feedback/test.csv`
+- `datasets/manifests/four_class/runtime_feedback/summary.json`
+
+The combined `train.csv`, `val.csv`, and `test.csv` keep the original baseline dataset and append the confirmed Pi captures on top.
+
+### Fine-Tune From The Current `best.pt`
+
+Use `--init-checkpoint` to keep training from the deployed classifier instead of starting over from ImageNet weights.
+
+Example on Mac or Linux:
+
+```bash
+python training/train_classifier.py \
+  --train-manifest datasets/manifests/four_class/runtime_feedback/train.csv \
+  --val-manifest datasets/manifests/four_class/runtime_feedback/val.csv \
+  --test-manifest datasets/manifests/four_class/runtime_feedback/test.csv \
+  --model mobilenet_v3_large \
+  --epochs 8 \
+  --batch-size 32 \
+  --device cpu \
+  --init-checkpoint models/best.pt \
+  --run-name runtime_feedback_finetune
+```
+
+Example on the Windows GPU machine:
+
+```powershell
+.\.venv-win\Scripts\python.exe .\training\train_classifier.py `
+  --train-manifest datasets\manifests\four_class\runtime_feedback\train.csv `
+  --val-manifest datasets\manifests\four_class\runtime_feedback\val.csv `
+  --test-manifest datasets\manifests\four_class\runtime_feedback\test.csv `
+  --model mobilenet_v3_large `
+  --epochs 8 `
+  --batch-size 64 `
+  --device cuda `
+  --init-checkpoint models\best.pt `
+  --run-name runtime_feedback_finetune
+```
+
+The fine-tuning run writes a new `training/runs/<run_name>/best.pt`. Deploy that checkpoint back to the Pi when you are ready to test the updated model.
 
 ## BU SCC
 

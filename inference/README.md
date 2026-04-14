@@ -39,25 +39,21 @@ python -c "import torch, torchvision; print(torch.__version__, torchvision.__ver
 
 ## Put The Checkpoint On The Pi
 
-Create the model directory if needed:
+The Pi scripts default to `models/best.pt`, with a fallback to `runtime/models/best.pt` if you want to keep the deployed checkpoint outside the tracked `models/` folder.
 
-```bash
-mkdir -p runtime/models
-```
-
-Then copy your trained checkpoint into it. A common convention is:
+The simplest convention in this repo is:
 
 ```text
-runtime/models/best.pt
+models/best.pt
 ```
 
 If you want to copy it over SSH from another machine, a typical command looks like:
 
 ```bash
-scp <path-to-best.pt> pi@<pi-host>:~/TrashformerPro/runtime/models/best.pt
+scp <path-to-best.pt> pi@<pi-host>:~/TrashformerPro/models/best.pt
 ```
 
-If `runtime/models/best.pt` does not exist yet, you still need to train the model first. Use `training/README.md`.
+If neither `models/best.pt` nor `runtime/models/best.pt` exists yet, you still need to train the model first. Use `training/README.md`.
 
 ## Verify The Camera
 
@@ -92,7 +88,7 @@ From the repo root on the Pi:
 ```bash
 source .venv/bin/activate
 python inference/pi/capture_and_classify.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --device cpu
 ```
 
@@ -102,7 +98,7 @@ If you want extra camera options, repeat `--camera-arg`. Example:
 
 ```bash
 python inference/pi/capture_and_classify.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --device cpu \
   --camera-arg=--timeout \
   --camera-arg=1000
@@ -114,7 +110,7 @@ Once manual inference looks reasonable, I'll move to the end-to-end Pi loop:
 
 ```bash
 /usr/bin/python3 scripts/pi/full_system_runner.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --classifier-python .venv/bin/python \
   --buzzer-mode active
 ```
@@ -123,7 +119,7 @@ With passive piezo buzzer:
 
 ```bash
 /usr/bin/python3 scripts/pi/full_system_runner.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --classifier-python .venv/bin/python \
   --buzzer-mode passive
 ```
@@ -133,9 +129,11 @@ Default behavior:
 - startup sound on boot
 - continuous image capture
 - empty-frame comparison using `runtime/calibration/empty_plate.jpg`
-- all LEDs flash when no object is present, inference fails, or confidence is below threshold
+- standby tone with LEDs off when no object is present or confidence is below threshold
+- alert sound plus LED flashing when capture, presence-check, or classifier execution actually fails
 - the predicted class LED stays on when confidence clears the threshold
 - a distinct buzzer pattern per class
+- a lower, Windows-inspired boot/shutdown chime when using a passive piezo buzzer
 - shutdown sound on exit
 
 Useful options:
@@ -151,6 +149,8 @@ The runner also writes event logs to:
 runtime/logs/full_system_events.jsonl
 ```
 
+Each prediction record also stores the exact checkpoint path and SHA-256 fingerprint that produced it, so you can verify which `best.pt` was active during a run.
+
 ## Classify An Existing Saved Image
 
 If you want to classify already-taken image without taking a new capture:
@@ -158,7 +158,7 @@ If you want to classify already-taken image without taking a new capture:
 ```bash
 python inference/pi/classify_image.py \
   --image runtime/captures/<capture>.jpg \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --device cpu
 ```
 
@@ -205,17 +205,18 @@ This stores the top-k predictions and the rest of the metadata in a machine-read
 
 The simplest workflow is:
 
-1. keep using `capture_and_classify.py` during hardware tests
+1. keep using `capture_and_classify.py` or the full Pi runner during hardware tests
 2. periodically review `runtime/inference_records/predictions.csv`
 3. fill in `confirmed_label` after you verify the true class
 4. add notes for bad lighting, occlusion, unusual objects, or hardware positioning issues
-5. use the saved images plus confirmed labels to build a real plate-image fine-tuning set later
+5. build combined fine-tuning manifests with `python training/prepare_runtime_feedback.py`
+6. fine-tune from the deployed checkpoint with `python training/train_classifier.py --init-checkpoint models/best.pt ...`
 
 If you already know the true class at capture time, you can store it immediately:
 
 ```bash
 python inference/pi/capture_and_classify.py \
-  --checkpoint runtime/models/best.pt \
+  --checkpoint models/best.pt \
   --device cpu \
   --confirmed-label plastic \
   --notes "clear bottle on white plate"
@@ -224,13 +225,15 @@ python inference/pi/capture_and_classify.py \
 ## Recommended Bring-Up Order
 
 1. verify the camera with `bash scripts/pi/test_cam.sh`
-2. copy `best.pt` to `runtime/models/best.pt`
-3. run `python inference/pi/capture_and_classify.py --checkpoint runtime/models/best.pt --device cpu`
+2. copy `best.pt` to `models/best.pt`
+3. run `python inference/pi/capture_and_classify.py --checkpoint models/best.pt --device cpu`
 4. inspect real predictions on a handful of items
 5. capture the empty reference with `/usr/bin/python3 scripts/pi/capture_empty_reference.py`
-6. run `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint runtime/models/best.pt --classifier-python .venv/bin/python`
+6. run `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint models/best.pt --classifier-python .venv/bin/python`
 7. keep collecting captures and prediction records while testing the full system
-8. fine-tune only after the failure cases become clear
+8. fill in `confirmed_label` for the captures you trust
+9. run `python training/prepare_runtime_feedback.py`
+10. fine-tune only after the failure cases become clear
 
 ## Important Note
 

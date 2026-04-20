@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { SiPytorch, SiPython, SiNvidia, SiRaspberrypi } from 'react-icons/si';
 import { Classifier } from './features/classifier';
+import { LiveMonitor } from './features/live-monitor';
 import { History } from './features/history';
 import { Insights } from './features/insights';
 
@@ -31,6 +32,7 @@ const App: React.FC = () => {
 
   const navItems = [
     { id: 'classifier', label: 'AI Classifier', icon: Zap },
+    { id: 'live-monitor', label: 'Live Monitor', icon: Cpu },
     { id: 'history', label: 'Classification Log', icon: HistoryIcon },
     { id: 'insights', label: 'Data Insights', icon: BarChart3 },
   ];
@@ -38,6 +40,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'classifier': return <Classifier />;
+      case 'live-monitor': return <LiveMonitor />;
       case 'history': return <History />;
       case 'insights': return <Insights />;
       default: return <Classifier />;
@@ -84,10 +87,10 @@ const App: React.FC = () => {
               System Status
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">AI Model</span>
-              <span className="flex items-center gap-1.5 text-emerald-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Active
+              <span className="text-muted-foreground">Model Check</span>
+              <span className="flex items-center gap-1.5 text-primary">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                Live Monitor
               </span>
             </div>
           </div>

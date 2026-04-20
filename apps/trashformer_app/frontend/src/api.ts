@@ -55,6 +55,7 @@ type RpcParams = {
   func: string;
   args?: Record<string, any>;
   module?: string;
+  skipCache?: boolean;
 };
 
 type StreamParams = RpcParams & {
@@ -144,12 +145,12 @@ export function invalidateCache(funcNames?: string[]): void {
   console.log("[CACHE_INVALIDATE]", { funcs: funcNames || "*", cleared: keysToRemove.length });
 }
 
-export async function rpcCall<T = any>({ func, args = {}, module }: RpcParams): Promise<T> {
+export async function rpcCall<T = any>({ func, args = {}, module, skipCache = false }: RpcParams): Promise<T> {
   const config = getConfig();
   const resolvedModule = module || `apps.${config.appName}.backend.main`;
   const key = cacheKey(func, args, resolvedModule);
 
-  const cached = getCached<T>(key);
+  const cached = skipCache ? undefined : getCached<T>(key);
   if (cached !== undefined) {
     console.log("[CACHE_HIT]", { func, module: resolvedModule });
     // Return cached data immediately, refresh in background
@@ -161,7 +162,9 @@ export async function rpcCall<T = any>({ func, args = {}, module }: RpcParams): 
 
   console.log("[FETCH_START]", { func, module: resolvedModule });
   const data = await fetchRpc<T>(config, resolvedModule, func, args);
-  setCache(key, data);
+  if (!skipCache) {
+    setCache(key, data);
+  }
   return data;
 }
 

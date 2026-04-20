@@ -11,6 +11,9 @@ interface PredictionResult {
   category: string;
   confidence: number;
   inference_time_ms: number;
+  model_source: string;
+  checkpoint_sha256: string;
+  model_name: string;
 }
 
 export const Classifier = () => {
@@ -230,6 +233,19 @@ export const Classifier = () => {
                     The TrashformerPro model identified this item as <span className="text-foreground font-semibold">{getCategoryLabel(result.category)}</span>. 
                     This classification was performed using a MobileNetV3-based architecture optimized for edge devices.
                   </div>
+                  <div className="rounded-lg border border-white/5 bg-background/40 p-3 text-xs text-muted-foreground space-y-1">
+                    <div>Model source: <span className="text-foreground">{result.model_source}</span></div>
+                    <div>Model name: <span className="text-foreground">{result.model_name}</span></div>
+                    <div>
+                      SHA: <span className="text-foreground">{result.checkpoint_sha256 ? result.checkpoint_sha256.slice(0, 12) : 'demo'}</span>
+                    </div>
+                  </div>
+                  {result.model_source === 'mock' ? (
+                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500 text-sm flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      This result came from demo mode, not a real checkpoint.
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : (

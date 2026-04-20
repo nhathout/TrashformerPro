@@ -1,73 +1,106 @@
-# Pi Script Quick Start
+# Pi Runtime Guide
 
-## Scripts In This Folder
+## What Lives Here
 
 - `scripts/pi/setup_pi.sh`: installs Pi-side packages and creates runtime folders
-- `scripts/pi/test_cam.sh`: captures one camera image into `runtime/captures/`
-- `scripts/pi/capture_empty_reference.py`: captures the empty-plate reference image used by the full runner
-- `scripts/pi/full_system_runner.py`: runs the end-to-end Pi loop with capture, classification, LEDs, and buzzer output
-- `scripts/pi/test_leds.py`: cycles the four class-status LEDs
-- `scripts/pi/test_buzzer.py`: tests an active buzzer or passive piezo buzzer
-- `scripts/pi/test_esp32_serial.py`: checks USB serial communication with the ESP32
+- `scripts/pi/capture_empty_reference.py`: captures the calibrated empty plate image
+- `scripts/pi/full_system_runner.py`: robot-only CLI wrapper around the shared Pi runtime
+- `scripts/pi/run_hardware_action.py`: one-shot LED/buzzer helper
+- `scripts/pi/test_cam.sh`: camera smoke test
+- `scripts/pi/test_leds.py`: LED smoke test
+- `scripts/pi/test_buzzer.py`: buzzer smoke test
+- `scripts/pi/test_esp32_serial.py`: optional ESP32 serial test
+
+## Runtime Modes
+
+TrashformerPro now has one shared Pi runtime state machine with a `2.0 s` stable hold and three supported ways to use it:
+
+1. `Robot-only`
+   Run `scripts/pi/full_system_runner.py`. No website required.
+2. `App-only`
+   Run the website on any machine. Upload/history/insights work without Pi hardware.
+3. `Tandem Pi demo`
+   Run the app backend on the Pi, start the runtime from the `Live Monitor` tab, and optionally let that same runtime drive LEDs and buzzer.
+
+Important:
+
+- only one live Pi runtime may own the camera at a time
+- do not run `full_system_runner.py` while the Pi app backend live runtime is active
+- if you want app + hardware together, use the app `Live Monitor` with hardware mirroring enabled
 
 ## One-Time Pi Setup
 
 From the repo root on the Pi:
 
 ```bash
+cd ~/TrashformerPro
 bash scripts/pi/setup_pi.sh
 ```
 
-That creates:
+That prepares:
 
-- `runtime/captures/`
 - `runtime/calibration/`
-- `runtime/models/`
+- `runtime/captures/`
 - `runtime/inference_records/`
+- `runtime/logs/`
 
-## Important Python Note
+## Starting A New Pi Session After Reboot
 
-For the hardware tests in `scripts/pi/`, use the system interpreter:
+From the repo root on the Pi:
 
 ```bash
-/usr/bin/python3
+cd ~/TrashformerPro
+source .venv/bin/activate
+ls -lh models/best.pt
 ```
 
-Reason: `setup_pi.sh` installs `gpiozero` and `pyserial` with `apt`, so those packages are available to the system Python immediately. If you activate `.venv` first and then run the hardware tests with `python` or `python3`, you may get missing-module errors.
+If you pulled changes that affect packages or hardware dependencies, rerun:
 
-If that happens, either run `deactivate` first or call `/usr/bin/python3` explicitly.
+```bash
+bash scripts/pi/setup_pi.sh
+source .venv/bin/activate
+```
 
-## What You Can Run Today
+Recapture `runtime/calibration/empty_plate.jpg` whenever any of these changed:
 
-### 1. Camera Test
+- camera angle
+- camera height
+- lighting
+- plate position
+- background / framing
 
-Capture one image:
+```bash
+/usr/bin/python3 scripts/pi/capture_empty_reference.py
+```
+
+Then choose either:
+
+- robot-only CLI runtime from this README
+- Pi-hosted app runtime from [apps/trashformer_app/README.md](/Users/noahhathout/Desktop/Work/Grad%20School/SE740/TrashformerPro/apps/trashformer_app/README.md)
+
+## Python Usage On The Pi
+
+Use `/usr/bin/python3` for GPIO-facing scripts in `scripts/pi/`.
+
+Reason:
+
+- `setup_pi.sh` installs `gpiozero` and serial tooling for the system Python
+- the classifier itself still runs from `.venv/bin/python`
+
+The normal split is:
+
+- hardware entrypoint: `/usr/bin/python3`
+- classifier subprocess: `.venv/bin/python`
+
+## Quick Hardware Checks
+
+### Camera
 
 ```bash
 bash scripts/pi/test_cam.sh
 ```
 
-The image will be written to:
-
-```text
-runtime/captures/test_<timestamp>.jpg
-```
-
-List the newest captures:
-
-```bash
-ls -lt runtime/captures
-```
-
-### 2. LED Test
-
-Run the default LED sequence:
-
-```bash
-/usr/bin/python3 scripts/pi/test_leds.py
-```
-
-Useful shorter test:
+### LEDs
 
 ```bash
 /usr/bin/python3 scripts/pi/test_leds.py --cycles 1 --hold-seconds 1.0
@@ -80,15 +113,15 @@ Default GPIO map:
 - `metal_glass`: `GPIO22` / physical pin `15`
 - `trash_other`: `GPIO23` / physical pin `16`
 
-### 3. Buzzer Test
+### Buzzer
 
-For an active buzzer:
+Active buzzer:
 
 ```bash
 /usr/bin/python3 scripts/pi/test_buzzer.py --mode active
 ```
 
-For a passive piezo buzzer:
+Passive piezo buzzer:
 
 ```bash
 /usr/bin/python3 scripts/pi/test_buzzer.py --mode passive
@@ -98,187 +131,127 @@ Default buzzer pin:
 
 - `GPIO24` / physical pin `18`
 
-### 4. Capture The Empty Reference
+## Blank Reference Calibration
 
-Once the camera position is fixed, capture the empty plate with normal lighting:
+Capture the empty plate with normal lighting and the final framing:
 
 ```bash
 /usr/bin/python3 scripts/pi/capture_empty_reference.py
 ```
 
-That writes:
+This creates:
 
 ```text
 runtime/calibration/empty_plate.jpg
 ```
 
-### 5. Full System Runner
+The shared runtime uses that image for:
 
-After you have a trained checkpoint in `models/best.pt` and `torch` installed in `.venv`, run:
+- blank-reference foreground checking
+- center-object presence gating
+- border-region plate / framing mismatch detection
 
-```bash
-/usr/bin/python3 scripts/pi/full_system_runner.py \
-  --checkpoint models/best.pt \
-  --classifier-python .venv/bin/python \
-  --buzzer-mode active
-```
+## Robot-Only Runtime
 
-If you have a passive piezo buzzer and want the softer Windows-inspired boot/shutdown chimes plus distinct category tones:
+Run the physical system without the website:
 
 ```bash
 /usr/bin/python3 scripts/pi/full_system_runner.py \
   --checkpoint models/best.pt \
   --classifier-python .venv/bin/python \
-  --buzzer-mode passive
+  --buzzer-mode passive \
+  --stable-hold-seconds 2.0 \
+  --standby-reminder-seconds 20 \
+  --min-confidence 0.70
 ```
 
-The runner uses:
-
-- system Python for GPIO and OpenCV
-- `.venv/bin/python` for the classifier subprocess
-
-That split keeps GPIO support simple while still letting the model run in the virtual environment that has `torch`.
-
-At startup, the runner prints the exact checkpoint path plus a short SHA-256 prefix so you can confirm which `best.pt` file is active.
-
-### 6. ESP32 USB Serial Test
-
-First list candidate serial ports:
+If you use an active buzzer instead:
 
 ```bash
-/usr/bin/python3 scripts/pi/test_esp32_serial.py --list
+/usr/bin/python3 scripts/pi/full_system_runner.py \
+  --checkpoint models/best.pt \
+  --classifier-python .venv/bin/python \
+  --buzzer-mode active \
+  --stable-hold-seconds 2.0 \
+  --standby-reminder-seconds 20 \
+  --min-confidence 0.70
 ```
 
-Then run the handshake test:
+What the runtime does:
 
-```bash
-/usr/bin/python3 scripts/pi/test_esp32_serial.py
-```
+- captures the latest live frame
+- compares it to `empty_plate.jpg`
+- checks for a valid core foreground object
+- if no core object is found, checks for a border-region plate / framing mismatch
+- waits `2.0 s` for the same object to stay stable
+- classifies with `models/best.pt`
+- logs runtime events and archives locked classification frames
 
-If the script does not receive `pong`, flash the included test sketch first:
+Runtime states:
+
+- `standby`: empty plate or no object
+- `tracking`: object present but still within the `2.0 s` hold window
+- `classified`: confident prediction
+- `low_confidence`: prediction ran but confidence stayed below threshold
+- `scene_error`: plate moved, disappeared, or framing changed too much
+- `degraded`: camera / classifier / runtime problem, with automatic retry
+
+Useful options:
+
+- `--min-confidence 0.75`
+- `--stable-hold-seconds 2.0`
+- `--category-hold-seconds 2.0`
+- `--standby-reminder-seconds 0`
+- `--skip-presence-check`
+- `--camera-arg=--timeout --camera-arg=1000`
+- `--once`
+
+Deprecated compatibility note:
+
+- `--decision-hold-seconds` still works as an alias for `--category-hold-seconds`
+
+## Where Runtime Output Goes
+
+Latest live frame:
 
 ```text
-firmware/esp32/serial_heartbeat/serial_heartbeat.ino
+runtime/captures/fullrun_latest.jpg
 ```
 
-That sketch prints `esp32-ready`, answers `ping` with `pong`, and emits heartbeat lines so the Pi-side serial test has something predictable to read.
+Archived locked classifications:
 
-## How To Copy A Captured Image Back To Your Laptop
+```text
+runtime/captures/fullrun_locked_<timestamp>.jpg
+```
 
-The simplest workflow is to pull the file from your laptop with `scp`. That way only the Pi needs SSH enabled.
+Prediction records:
 
-1. On the Pi, capture an image:
+```text
+runtime/inference_records/predictions.csv
+runtime/inference_records/json/
+```
+
+Runtime event log:
+
+```text
+runtime/logs/full_system_events.jsonl
+```
+
+Each prediction record includes the checkpoint path and SHA-256 fingerprint used for that inference.
+
+## Copy Captures Back To Your Mac
+
+From your Mac:
 
 ```bash
-bash scripts/pi/test_cam.sh
-ls -lt runtime/captures
+scp <pi-user>@<pi-host>:~/TrashformerPro/runtime/captures/fullrun_locked_<timestamp>.jpg ~/Downloads/
 ```
 
-2. On your laptop, copy one image down:
+Or copy the full runtime data for relabeling / fine-tuning:
 
 ```bash
-scp <pi-user>@raspberrypi.local:~/TrashformerPro/runtime/captures/test_<timestamp>.jpg ~/Downloads/
+rsync -av <pi-user>@<pi-host>:~/TrashformerPro/runtime/captures/ runtime/captures/
+rsync -av <pi-user>@<pi-host>:~/TrashformerPro/runtime/inference_records/ runtime/inference_records/
 ```
 
-If `raspberrypi.local` does not resolve, find the Pi IP address:
-
-```bash
-hostname -I
-```
-
-Then use that IP in the `scp` command instead:
-
-```bash
-scp <pi-user>@<pi-ip>:~/TrashformerPro/runtime/captures/test_<timestamp>.jpg ~/Downloads/
-```
-
-If you want the whole capture folder instead of one file:
-
-```bash
-scp -r <pi-user>@<pi-host>:~/TrashformerPro/runtime/captures ~/Downloads/trashformer_captures
-```
-
-## Model Location
-
-The Pi scripts now default to `models/best.pt`, with a fallback to `runtime/models/best.pt` if needed. If you want to replace the deployed model, copy your selected checkpoint into one of those locations and pass `--checkpoint` explicitly if you want zero ambiguity.
-
-Example copy command:
-
-```bash
-scp /path/to/best.pt <pi-user>@<pi-host>:~/TrashformerPro/models/best.pt
-```
-
-Then on the Pi:
-
-```bash
-source .venv/bin/activate
-pip install torch torchvision
-python inference/pi/capture_and_classify.py \
-  --checkpoint models/best.pt \
-  --device cpu
-```
-
-For the full system loop, also capture the empty reference and then run:
-
-```bash
-/usr/bin/python3 scripts/pi/capture_empty_reference.py
-/usr/bin/python3 scripts/pi/full_system_runner.py \
-  --checkpoint models/best.pt \
-  --classifier-python .venv/bin/python
-```
-
-If you only want to capture an image inside the inference workflow without classifying yet:
-
-```bash
-python inference/pi/capture_img.py
-```
-
-## Suggested Order For Your Current Setup
-
-Since your camera and LEDs are already connected:
-
-1. `bash scripts/pi/setup_pi.sh`
-2. `bash scripts/pi/test_cam.sh`
-3. `/usr/bin/python3 scripts/pi/test_leds.py`
-4. `/usr/bin/python3 scripts/pi/test_buzzer.py --mode active` or `--mode passive`
-5. flash `firmware/esp32/serial_heartbeat/serial_heartbeat.ino`
-6. `/usr/bin/python3 scripts/pi/test_esp32_serial.py --list`
-7. `/usr/bin/python3 scripts/pi/test_esp32_serial.py`
-8. train and copy `best.pt` to `models/best.pt`
-9. `/usr/bin/python3 scripts/pi/capture_empty_reference.py`
-10. `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint models/best.pt --classifier-python .venv/bin/python`
-
-That gives you camera, indicators, model inference, and the end-to-end output loop before you move on to motors.
-
-## Relabel And Fine-Tune Stored Captures
-
-Every inference already saves:
-
-- the image in `runtime/captures/`
-- the prediction record in `runtime/inference_records/predictions.csv`
-
-To build a fine-tuning set from Pi mistakes:
-
-1. Open `runtime/inference_records/predictions.csv`.
-2. For each image you want to use, fill in `confirmed_label` with the true class:
-   `plastic`, `paper_cardboard`, `metal_glass`, or `trash_other`.
-3. Add optional notes in the `notes` column.
-4. Build combined manifests:
-
-```bash
-python training/prepare_runtime_feedback.py
-```
-
-5. Fine-tune from the current deployed checkpoint:
-
-```bash
-python training/train_classifier.py \
-  --train-manifest datasets/manifests/four_class/runtime_feedback/train.csv \
-  --val-manifest datasets/manifests/four_class/runtime_feedback/val.csv \
-  --test-manifest datasets/manifests/four_class/runtime_feedback/test.csv \
-  --model mobilenet_v3_large \
-  --device cpu \
-  --init-checkpoint models/best.pt
-```
-
-That keeps the original dataset in the training mix while adding the confirmed Pi captures on top.
+For the relabel + fine-tune loop, see [training/README.md](/Users/noahhathout/Desktop/Work/Grad%20School/SE740/TrashformerPro/training/README.md).

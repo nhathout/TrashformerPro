@@ -127,18 +127,22 @@ With passive piezo buzzer:
 Default behavior:
 
 - startup sound on boot
-- continuous image capture
-- empty-frame comparison using `runtime/calibration/empty_plate.jpg`
-- standby tone with LEDs off when no object is present or confidence is below threshold
-- alert sound plus LED flashing when capture, presence-check, or classifier execution actually fails
+- repeated latest-frame capture with a shared `2.0 s` stability gate
+- blank-reference comparison using `runtime/calibration/empty_plate.jpg`
+- mutually exclusive runtime states for `standby`, `tracking`, `classified`, `low_confidence`, `scene_error`, and `degraded`
+- standby gives only an occasional reminder beep when no object is present or confidence is below threshold
+- alert sound plus LED flashing when the plate / framing changes too much, or when runtime failures push the system into `degraded`
 - the predicted class LED stays on when confidence clears the threshold
 - a distinct buzzer pattern per class
-- a lower, Windows-inspired boot/shutdown chime when using a passive piezo buzzer
+- more playful boot/shutdown chirps when using a passive piezo buzzer
 - shutdown sound on exit
 
 Useful options:
 
 - `--min-confidence 0.75`
+- `--stable-hold-seconds 2.0`
+- `--category-hold-seconds 2.0`
+- `--standby-reminder-seconds 20`
 - `--skip-presence-check`
 - `--once`
 - `--camera-arg=--timeout --camera-arg=1000`

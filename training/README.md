@@ -228,7 +228,7 @@ After the first baseline works, the recommended next step is Pi validation, not 
 1. Copy `best.pt` to the Raspberry Pi, usually as `models/best.pt`.
 2. Run inference on real plate captures.
 3. Capture an empty reference image with `/usr/bin/python3 scripts/pi/capture_empty_reference.py`.
-4. Run the full Pi loop with `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint models/best.pt --classifier-python .venv/bin/python`.
+4. Run the full Pi loop with `/usr/bin/python3 scripts/pi/full_system_runner.py --checkpoint models/best.pt --classifier-python .venv/bin/python --stable-hold-seconds 2.0`.
 5. Review the failure cases from the real hardware setup.
 6. Fine-tune later on those real captures if needed.
 
@@ -236,10 +236,12 @@ See `inference/README.md` for the Pi-side workflow.
 
 ## Fine-Tune On Confirmed Pi Captures
 
-The Pi inference workflow already archives:
+The Pi runtime workflow already archives:
 
-- every captured image in `runtime/captures/`
-- every prediction record in `runtime/inference_records/predictions.csv`
+- the latest live frame plus locked classification captures in `runtime/captures/`
+- every logged prediction record in `runtime/inference_records/predictions.csv`
+
+That same feedback loop now also applies to locked classifications from the app `Live Monitor` tab when it is running on the Pi.
 
 To turn those into a fine-tuning set:
 
@@ -299,6 +301,99 @@ Example on the Windows GPU machine:
 ```
 
 The fine-tuning run writes a new `training/runs/<run_name>/best.pt`. Deploy that checkpoint back to the Pi when you are ready to test the updated model.
+
+## Pull Pi Captures To Mac, Label Them, Fine-Tune, And Redeploy
+
+This is the most practical improvement loop before a presentation.
+
+### 1. Copy The Current Pi Data To Your Mac
+
+Run this on your Mac from the repo root:
+
+```bash
+scp <pi-user>@<pi-ip>:~/TrashformerPro/models/best.pt models/best.pt
+
+mkdir -p runtime/captures runtime/inference_records runtime/inference_records/json
+
+rsync -av <pi-user>@<pi-ip>:~/TrashformerPro/runtime/captures/ runtime/captures/
+rsync -av <pi-user>@<pi-ip>:~/TrashformerPro/runtime/inference_records/ runtime/inference_records/
+```
+
+That gives you:
+
+- the current deployed checkpoint
+- all saved captures from the Pi
+- the prediction log you will relabel
+
+### 2. Label The Mistakes On Your Mac
+
+Open:
+
+```text
+runtime/inference_records/predictions.csv
+```
+
+Fill in:
+
+- `confirmed_label` with the true class
+- `notes` if you want to track glare, overlap, bad framing, or unusual objects
+
+Valid labels remain:
+
+- `plastic`
+- `paper_cardboard`
+- `metal_glass`
+- `trash_other`
+
+### 3. Build The Feedback Manifests On Your Mac
+
+Set up the Mac training environment if needed:
+
+```bash
+bash training/mac/setup_mac_training.sh
+source .venv-mac/bin/activate
+```
+
+Prepare the baseline manifests and the feedback manifests:
+
+```bash
+python training/prepare_dataset.py --variant standardized_256 --seed 42
+python training/prepare_runtime_feedback.py
+```
+
+### 4. Fine-Tune From The Current Pi Checkpoint On Your Mac
+
+For Apple Silicon Macs:
+
+```bash
+python training/train_classifier.py \
+  --train-manifest datasets/manifests/four_class/runtime_feedback/train.csv \
+  --val-manifest datasets/manifests/four_class/runtime_feedback/val.csv \
+  --test-manifest datasets/manifests/four_class/runtime_feedback/test.csv \
+  --model mobilenet_v3_large \
+  --epochs 8 \
+  --batch-size 32 \
+  --workers 4 \
+  --device mps \
+  --init-checkpoint models/best.pt \
+  --run-name runtime_feedback_finetune
+```
+
+If your Mac does not support `mps`, change `--device mps` to `--device cpu`.
+
+### 5. Deploy The Updated Checkpoint Back To The Pi
+
+Run this on your Mac:
+
+```bash
+scp training/runs/runtime_feedback_finetune/best.pt \
+  <pi-user>@<pi-ip>:~/TrashformerPro/models/best.pt
+```
+
+Then on the Pi, restart whichever runtime you are using:
+
+- the app backend in `apps/trashformer_app/README.md`
+- or the hardware loop in `scripts/pi/README.md`
 
 ## BU SCC
 

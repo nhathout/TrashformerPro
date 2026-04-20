@@ -72,6 +72,14 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.on_event("shutdown")
+def shutdown_runtime() -> None:
+    try:
+        backend_main.stop_runtime(clear_outputs=True)
+    except Exception:
+        pass
+
+
 @app.post("/data")
 def data(payload: dict[str, Any]) -> JSONResponse:
     func, args = _parse_payload(payload)

@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from inference.pi.runtime_engine import DEFAULT_MIN_CONFIDENCE
 from inference.pi.runtime_utils import describe_checkpoint_file, ensure_runtime_dirs, repo_relative, resolve_checkpoint_path, resolve_repo_path
 from scripts.pi.hardware_config import BUZZER_GPIO_PIN, GPIO_TO_PHYSICAL_PIN
 
@@ -29,6 +30,9 @@ DEFAULT_LOG_PATH = Path("runtime/logs/full_system_events.jsonl")
 
 
 def parse_args() -> argparse.Namespace:
+    from inference.pi.runtime_engine import PresenceConfig
+
+    default_presence = PresenceConfig()
     parser = argparse.ArgumentParser(
         description="Run the full TrashformerPro Pi loop: capture, classify, LEDs, and buzzer output."
     )
@@ -46,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--classifier-device", type=str, default="cpu", help="Inference device passed to classify_image.py.")
     parser.add_argument("--top-k", type=int, default=4)
-    parser.add_argument("--min-confidence", type=float, default=0.70)
+    parser.add_argument("--min-confidence", type=float, default=DEFAULT_MIN_CONFIDENCE)
     parser.add_argument("--capture-prefix", type=str, default="fullrun")
     parser.add_argument(
         "--camera-arg",
@@ -65,26 +69,26 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable the empty-frame comparison and always attempt classification.",
     )
-    parser.add_argument("--presence-resize", type=int, default=256)
-    parser.add_argument("--presence-pixel-threshold", type=int, default=18)
-    parser.add_argument("--presence-ratio-threshold", type=float, default=0.015)
-    parser.add_argument("--presence-mean-threshold", type=float, default=8.0)
+    parser.add_argument("--presence-resize", type=int, default=default_presence.resize)
+    parser.add_argument("--presence-pixel-threshold", type=int, default=default_presence.pixel_threshold)
+    parser.add_argument("--presence-ratio-threshold", type=float, default=default_presence.ratio_threshold)
+    parser.add_argument("--presence-mean-threshold", type=float, default=default_presence.mean_threshold)
     parser.add_argument(
         "--scene-error-border-fraction",
         type=float,
-        default=0.18,
+        default=default_presence.scene_error_border_fraction,
         help="Outer border fraction used to detect if the plate or camera framing changed too much.",
     )
     parser.add_argument(
         "--scene-error-ratio-threshold",
         type=float,
-        default=0.12,
+        default=default_presence.scene_error_ratio_threshold,
         help="Alert when the border-region changed-ratio reaches this threshold.",
     )
     parser.add_argument(
         "--scene-error-mean-threshold",
         type=float,
-        default=14.0,
+        default=default_presence.scene_error_mean_threshold,
         help="Alert when the border-region mean difference reaches this threshold.",
     )
     parser.add_argument("--loop-interval", type=float, default=DEFAULT_LOOP_INTERVAL)

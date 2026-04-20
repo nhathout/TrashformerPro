@@ -17,6 +17,7 @@ DEFAULT_CHECKPOINT_CANDIDATES = (
     Path("models/best.pt"),
     Path("runtime/models/best.pt"),
 )
+DEFAULT_CAMERA_TIMEOUT_MS = 1000
 
 CSV_FIELDNAMES = [
     "record_id",
@@ -110,8 +111,11 @@ def capture_image(
         "-o",
         str(output_path),
     ]
-    if camera_args:
-        command.extend(camera_args)
+    normalized_args = list(camera_args or [])
+    if "--timeout" not in normalized_args:
+        normalized_args.extend(["--timeout", str(DEFAULT_CAMERA_TIMEOUT_MS)])
+    if normalized_args:
+        command.extend(normalized_args)
 
     subprocess.run(command, check=True)
     return output_path

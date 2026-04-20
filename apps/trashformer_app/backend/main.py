@@ -20,7 +20,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from inference.pi.runtime_engine import (
+    DEFAULT_CAMERA_TIMEOUT_MS,
     DEFAULT_LIVE_CAPTURE_PATH,
+    DEFAULT_MIN_CONFIDENCE,
     DEFAULT_STABLE_HOLD_SECONDS,
     DEFAULT_STANDBY_REMINDER_SECONDS,
     HardwareConfig,
@@ -220,6 +222,8 @@ class BackendRuntimeService:
                 "required_hold_seconds": float(DEFAULT_LIVE_HOLD_SECONDS),
                 "object_id": None,
             },
+            "decision": None,
+            "confidence_passed": False,
             "classification_triggered": False,
             "classification_event_id": None,
             "saved_capture_path": None,
@@ -300,11 +304,40 @@ def _record_runtime_prediction(payload: Dict[str, Any]) -> None:
     )
 
 
+def _snapshot_with_optional_image(snapshot: Dict[str, Any], include_image: bool) -> Dict[str, Any]:
+    enriched = dict(snapshot)
+    image_path = enriched.get("image_path")
+    if not include_image or not image_path:
+        enriched["image_b64"] = ""
+        return enriched
+
+    resolved = REPO_ROOT / str(image_path)
+    try:
+        image_data = resolved.read_bytes()
+    except OSError:
+        enriched["image_b64"] = ""
+        enriched["error"] = enriched.get("error") or f"Latest runtime frame is unavailable: {resolved}"
+        return enriched
+
+    enriched["image_b64"] = f"data:image/jpeg;base64,{base64.b64encode(image_data).decode('ascii')}"
+    return enriched
+
+
 def _build_runtime_config(**args: Any) -> RuntimeConfig:
+    default_presence = PresenceConfig()
     camera_width = int(args.get("camera_width", DEFAULT_LIVE_CAMERA_WIDTH))
     camera_height = int(args.get("camera_height", DEFAULT_LIVE_CAMERA_HEIGHT))
+    camera_timeout_ms = int(args.get("camera_timeout_ms", DEFAULT_CAMERA_TIMEOUT_MS))
     extra_camera_args = [str(value) for value in args.get("camera_args", [])]
-    camera_args = ("--width", str(camera_width), "--height", str(camera_height), *extra_camera_args)
+    camera_args = (
+        "--width",
+        str(camera_width),
+        "--height",
+        str(camera_height),
+        "--timeout",
+        str(camera_timeout_ms),
+        *extra_camera_args,
+    )
 
     classifier_python = Path(str(args.get("classifier_python", DEFAULT_RUNTIME_CLASSIFIER_PYTHON)))
     drive_outputs = bool(args.get("drive_outputs", False))
@@ -315,7 +348,7 @@ def _build_runtime_config(**args: Any) -> RuntimeConfig:
         classifier_python=classifier_python,
         classifier_device=str(args.get("classifier_device", "cpu")),
         top_k=int(args.get("top_k", 4)),
-        min_confidence=float(args.get("min_confidence", 0.70)),
+        min_confidence=float(args.get("min_confidence", DEFAULT_MIN_CONFIDENCE)),
         capture_prefix="live_monitor",
         latest_capture_path=Path(str(args.get("latest_capture_path", DEFAULT_LIVE_CAPTURE_PATH))),
         camera_args=tuple(camera_args),
@@ -323,12 +356,18 @@ def _build_runtime_config(**args: Any) -> RuntimeConfig:
         skip_presence_check=bool(args.get("skip_presence_check", False)),
         presence=PresenceConfig(
             resize=int(args.get("presence_resize", DEFAULT_LIVE_RESIZE)),
-            pixel_threshold=int(args.get("presence_pixel_threshold", 18)),
-            ratio_threshold=float(args.get("presence_ratio_threshold", 0.015)),
-            mean_threshold=float(args.get("presence_mean_threshold", 8.0)),
-            scene_error_border_fraction=float(args.get("scene_error_border_fraction", 0.18)),
-            scene_error_ratio_threshold=float(args.get("scene_error_ratio_threshold", 0.12)),
-            scene_error_mean_threshold=float(args.get("scene_error_mean_threshold", 14.0)),
+            pixel_threshold=int(args.get("presence_pixel_threshold", default_presence.pixel_threshold)),
+            ratio_threshold=float(args.get("presence_ratio_threshold", default_presence.ratio_threshold)),
+            mean_threshold=float(args.get("presence_mean_threshold", default_presence.mean_threshold)),
+            scene_error_border_fraction=float(
+                args.get("scene_error_border_fraction", default_presence.scene_error_border_fraction)
+            ),
+            scene_error_ratio_threshold=float(
+                args.get("scene_error_ratio_threshold", default_presence.scene_error_ratio_threshold)
+            ),
+            scene_error_mean_threshold=float(
+                args.get("scene_error_mean_threshold", default_presence.scene_error_mean_threshold)
+            ),
         ),
         loop_interval=float(args.get("loop_interval", 1.0)),
         stable_hold_seconds=float(args.get("stable_hold_seconds", DEFAULT_LIVE_HOLD_SECONDS)),
@@ -346,6 +385,32 @@ def _build_runtime_config(**args: Any) -> RuntimeConfig:
         ),
         log_path=Path(str(args.get("log_path", "runtime/logs/app_runtime_events.jsonl"))),
     )
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_default_runtime_start_args() -> Dict[str, Any]:
+    return {
+        "stable_hold_seconds": float(os.getenv("TRASHFORMER_RUNTIME_STABLE_HOLD_SECONDS", str(DEFAULT_LIVE_HOLD_SECONDS))),
+        "camera_width": int(os.getenv("TRASHFORMER_RUNTIME_CAMERA_WIDTH", str(DEFAULT_LIVE_CAMERA_WIDTH))),
+        "camera_height": int(os.getenv("TRASHFORMER_RUNTIME_CAMERA_HEIGHT", str(DEFAULT_LIVE_CAMERA_HEIGHT))),
+        "camera_timeout_ms": int(os.getenv("TRASHFORMER_RUNTIME_CAMERA_TIMEOUT_MS", str(DEFAULT_CAMERA_TIMEOUT_MS))),
+        "drive_outputs": _env_flag("TRASHFORMER_RUNTIME_DRIVE_OUTPUTS", default=True),
+        "hardware_buzzer_mode": os.getenv("TRASHFORMER_RUNTIME_BUZZER_MODE", "passive"),
+        "standby_reminder_seconds": float(
+            os.getenv("TRASHFORMER_RUNTIME_STANDBY_REMINDER_SECONDS", str(DEFAULT_LIVE_STANDBY_REMINDER_SECONDS))
+        ),
+        "category_hold_seconds": float(
+            os.getenv("TRASHFORMER_RUNTIME_CATEGORY_HOLD_SECONDS", str(DEFAULT_LIVE_CATEGORY_HOLD_SECONDS))
+        ),
+        "min_confidence": float(os.getenv("TRASHFORMER_RUNTIME_MIN_CONFIDENCE", str(DEFAULT_MIN_CONFIDENCE))),
+        "include_image": False,
+    }
 
 
 def _detect_raspberry_pi_model() -> str:
@@ -451,6 +516,7 @@ def get_model_status() -> Dict[str, Any]:
 
 
 def start_runtime(**args) -> Dict[str, Any]:
+    include_image = bool(args.get("include_image", False))
     runtime_capabilities = get_runtime_capabilities()
     model_status = get_model_status()
 
@@ -467,7 +533,7 @@ def start_runtime(**args) -> Dict[str, Any]:
                 "model_status": model_status,
             }
         )
-        return snapshot
+        return _snapshot_with_optional_image(snapshot, include_image)
 
     if not model_status["ready"]:
         snapshot = _RUNTIME_SERVICE.get_snapshot()
@@ -482,13 +548,13 @@ def start_runtime(**args) -> Dict[str, Any]:
                 "model_status": model_status,
             }
         )
-        return snapshot
+        return _snapshot_with_optional_image(snapshot, include_image)
 
     config = _build_runtime_config(**args)
     snapshot = _RUNTIME_SERVICE.start(config)
     snapshot["runtime_capabilities"] = runtime_capabilities
     snapshot["model_status"] = model_status
-    return snapshot
+    return _snapshot_with_optional_image(snapshot, include_image)
 
 
 def stop_runtime(clear_outputs: bool = True) -> Dict[str, Any]:
@@ -498,11 +564,11 @@ def stop_runtime(clear_outputs: bool = True) -> Dict[str, Any]:
     return snapshot
 
 
-def get_runtime_snapshot() -> Dict[str, Any]:
+def get_runtime_snapshot(include_image: bool = False) -> Dict[str, Any]:
     snapshot = _RUNTIME_SERVICE.get_snapshot()
     snapshot["runtime_capabilities"] = get_runtime_capabilities()
     snapshot["model_status"] = get_model_status()
-    return snapshot
+    return _snapshot_with_optional_image(snapshot, include_image)
 
 
 def classify_image_streaming(**args) -> Generator:

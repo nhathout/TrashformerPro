@@ -103,26 +103,31 @@ The app `Live Monitor` now controls a shared Pi runtime instead of running its o
 
 That runtime:
 
+- captures a fresh blank reference on tandem-demo startup unless you disable that in the launcher
 - captures the latest frame from the Pi camera
 - performs a blank-reference foreground check against `runtime/calibration/empty_plate.jpg`
+- crops around the detected foreground object before running the classifier
 - distinguishes:
   - `standby`
   - `tracking`
   - `classified`
-  - `low_confidence`
   - `scene_error`
   - `degraded`
+- lights all class LEDs during the tracking / classifying window when hardware mirroring is enabled
 - requires a `2.0 s` stable hold before classification
 - can optionally mirror the same runtime state to the Pi LEDs and buzzer
-- archives locked classification frames into `runtime/captures/`
-- writes locked predictions to `runtime/inference_records/predictions.csv`
+- archives classification-attempt frames into `runtime/captures/`
+- writes classification attempts to `runtime/inference_records/predictions.csv`
+- only shows the locked-class popup when a prediction passes the active confidence threshold
+- returns to `standby` after low-confidence attempts while still exposing the low-confidence result in the status cards
 
 Important:
 
 - the app can run without the robot
 - the robot can run without the app
-- if you want app + hardware together, start the runtime from the app and enable hardware mirroring there
+- the recommended demo mode is to run the backend with the runtime already active, then use the web app as a real-time mirror of that same runtime
 - do not run `scripts/pi/full_system_runner.py` at the same time as the app live runtime
+- live image frames are only encoded and sent when the `Live Monitor` view is actually polling for them
 
 ## Recommended Pi Demo Flow
 
@@ -151,16 +156,32 @@ Confirm the checkpoint:
 ls -lh models/best.pt
 ```
 
-Capture the blank reference:
+If you want to refresh the blank reference manually:
 
 ```bash
 /usr/bin/python3 scripts/pi/capture_empty_reference.py
 ```
 
-Start the backend:
+Start the default tandem mode:
 
 ```bash
-python apps/trashformer_app/backend/server.py
+bash scripts/pi/start_tandem_demo.sh
+```
+
+This starts:
+
+- the backend server
+- the shared Pi runtime
+- hardware outputs enabled by default
+- a fresh empty-plate calibration capture before runtime startup
+
+Robot-only fallback:
+
+```bash
+/usr/bin/python3 scripts/pi/full_system_runner.py \
+  --checkpoint models/best.pt \
+  --classifier-python .venv/bin/python \
+  --buzzer-mode passive
 ```
 
 ### On Your Mac
@@ -188,8 +209,8 @@ http://<pi-ip>:8000
 Inside the app:
 
 1. open `Live Monitor`
-2. click `Start`
-3. optionally enable `Mirror Pi LEDs + buzzer`
+2. confirm the runtime is already active
+3. leave `Mirror Pi LEDs + buzzer` enabled if you want the app to keep mirroring hardware state
 
 The app backend then owns:
 
@@ -197,6 +218,7 @@ The app backend then owns:
 - the `2.0 s` stability gate
 - classification
 - optional LED / buzzer outputs
+- the current runtime state whether or not the browser is open
 
 ## Start Another Session After Reboot
 
@@ -223,10 +245,10 @@ Recapture the blank reference if the camera, lighting, plate, or framing changed
 /usr/bin/python3 scripts/pi/capture_empty_reference.py
 ```
 
-Start the backend:
+Start the default tandem mode:
 
 ```bash
-python apps/trashformer_app/backend/server.py
+bash scripts/pi/start_tandem_demo.sh
 ```
 
 On your Mac, hard refresh the browser if the UI does not look current.

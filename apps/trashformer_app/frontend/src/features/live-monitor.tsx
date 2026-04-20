@@ -100,6 +100,8 @@ type LiveSnapshot = {
   prediction: PredictionPayload | null;
   presence: PresencePayload | null;
   tracking: TrackingPayload;
+  decision: 'classified' | 'low_confidence' | null;
+  confidence_passed: boolean;
   classification_triggered: boolean;
   classification_event_id: string | null;
   saved_capture_path: string | null;
@@ -116,6 +118,7 @@ type LiveSnapshot = {
 
 const HOLD_SECONDS = 2.0;
 const POLL_INTERVAL_MS = 1200;
+const MIN_CONFIDENCE = 0.6;
 
 function getCategoryLabel(category: string) {
   return category
@@ -155,21 +158,29 @@ export const LiveMonitor = () => {
   const [popupOpen, setPopupOpen] = React.useState(false);
   const [popupPrediction, setPopupPrediction] = React.useState<PredictionPayload | null>(null);
   const timeoutRef = React.useRef<number | null>(null);
-  const lastPopupObjectIdRef = React.useRef<string | null>(null);
+  const lastPopupEventIdRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
 
     async function loadStatus() {
       try {
-        const snapshotData = await rpcCall<LiveSnapshot>({ func: 'get_runtime_snapshot', skipCache: true });
+        const snapshotData = await rpcCall<LiveSnapshot>({
+          func: 'get_runtime_snapshot',
+          args: { include_image: false },
+          skipCache: true,
+        });
         if (!cancelled) {
           setSnapshot(snapshotData);
           setModelStatus(snapshotData.model_status);
           setRuntimeCapabilities(snapshotData.runtime_capabilities);
           setRunning(Boolean(snapshotData.active));
           setError(snapshotData.error || null);
-          if (!snapshotData.runtime_capabilities.hardware_outputs_available) {
+          if (snapshotData.active) {
+            setHardwareOutputsEnabled(Boolean(snapshotData.hardware?.enabled));
+          } else if (snapshotData.runtime_capabilities.hardware_outputs_available) {
+            setHardwareOutputsEnabled(true);
+          } else {
             setHardwareOutputsEnabled(false);
           }
         }
@@ -199,7 +210,11 @@ export const LiveMonitor = () => {
 
     async function poll() {
       try {
-        const data = await rpcCall<LiveSnapshot>({ func: 'get_runtime_snapshot', skipCache: true });
+        const data = await rpcCall<LiveSnapshot>({
+          func: 'get_runtime_snapshot',
+          args: { include_image: true },
+          skipCache: true,
+        });
 
         if (cancelled) {
           return;
@@ -209,17 +224,19 @@ export const LiveMonitor = () => {
         setModelStatus(data.model_status);
         setRuntimeCapabilities(data.runtime_capabilities);
         setError(data.error || null);
+        setHardwareOutputsEnabled(Boolean(data.hardware?.enabled));
         if (!data.active) {
           setRunning(false);
         }
 
         if (
           data.classification_triggered &&
+          data.confidence_passed &&
           data.prediction &&
-          data.tracking.object_id &&
-          lastPopupObjectIdRef.current !== data.tracking.object_id
+          data.classification_event_id &&
+          lastPopupEventIdRef.current !== data.classification_event_id
         ) {
-          lastPopupObjectIdRef.current = data.tracking.object_id;
+          lastPopupEventIdRef.current = data.classification_event_id;
           setPopupPrediction(data.prediction);
           setPopupOpen(true);
           invalidateCache(['get_history', 'get_stats']);
@@ -264,7 +281,8 @@ export const LiveMonitor = () => {
             hardware_buzzer_mode: 'passive',
             standby_reminder_seconds: 20,
             category_hold_seconds: 2.0,
-            min_confidence: 0.70,
+            min_confidence: MIN_CONFIDENCE,
+            include_image: true,
           },
           skipCache: true,
         });
@@ -274,6 +292,7 @@ export const LiveMonitor = () => {
           setModelStatus(data.model_status);
           setRuntimeCapabilities(data.runtime_capabilities);
           setError(data.error || null);
+          setHardwareOutputsEnabled(Boolean(data.hardware?.enabled));
           setRunning(Boolean(data.active));
         }
       } catch (err: any) {
@@ -304,6 +323,7 @@ export const LiveMonitor = () => {
         setRuntimeCapabilities(data.runtime_capabilities);
         setRunning(false);
         setError(data.error || null);
+        setHardwareOutputsEnabled(Boolean(data.hardware?.enabled));
       } catch (err: any) {
         setError(err.message);
       }
@@ -326,7 +346,8 @@ export const LiveMonitor = () => {
           hardware_buzzer_mode: 'passive',
           standby_reminder_seconds: 20,
           category_hold_seconds: 2.0,
-          min_confidence: 0.70,
+          min_confidence: MIN_CONFIDENCE,
+          include_image: true,
         },
         skipCache: true,
       });
@@ -334,18 +355,21 @@ export const LiveMonitor = () => {
       setModelStatus(data.model_status);
       setRuntimeCapabilities(data.runtime_capabilities);
       setError(data.error || null);
+      setHardwareOutputsEnabled(Boolean(data.hardware?.enabled));
       setRunning(Boolean(data.active));
     } catch (err: any) {
       setError(err.message);
     }
   }, [hardwareOutputsEnabled, runtimeCapabilities]);
 
-  const stableProgress = snapshot
+  const gateActive = snapshot ? ['tracking', 'classifying'].includes(snapshot.status) : false;
+  const stableProgress = snapshot && gateActive
     ? Math.min((snapshot.tracking.stable_for_seconds / snapshot.tracking.required_hold_seconds) * 100, 100)
     : 0;
 
   const liveMonitorSupported = runtimeCapabilities?.live_monitor_supported ?? true;
   const hardwareOutputsAvailable = runtimeCapabilities?.hardware_outputs_available ?? false;
+  const currentState = snapshot?.status || 'standby';
 
   return (
     <>
@@ -418,13 +442,19 @@ export const LiveMonitor = () => {
                     variant="outline"
                     onClick={async () => {
                       try {
-                        const data = await rpcCall<LiveSnapshot>({ func: 'get_runtime_snapshot', skipCache: true });
+                        const data = await rpcCall<LiveSnapshot>({
+                          func: 'get_runtime_snapshot',
+                          args: { include_image: Boolean(running) },
+                          skipCache: true,
+                        });
                         setError(null);
                         setSnapshot(data);
                         setModelStatus(data.model_status);
                         setRuntimeCapabilities(data.runtime_capabilities);
                         setRunning(Boolean(data.active));
-                        if (!data.runtime_capabilities.hardware_outputs_available) {
+                        if (data.active) {
+                          setHardwareOutputsEnabled(Boolean(data.hardware?.enabled));
+                        } else if (!data.runtime_capabilities.hardware_outputs_available) {
                           setHardwareOutputsEnabled(false);
                         }
                       } catch (err: any) {
@@ -501,7 +531,7 @@ export const LiveMonitor = () => {
                 <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   <span>Stability Hold</span>
                   <span>
-                    {snapshot ? snapshot.tracking.stable_for_seconds.toFixed(1) : '0.0'}s / {HOLD_SECONDS.toFixed(1)}s
+                    {snapshot && gateActive ? snapshot.tracking.stable_for_seconds.toFixed(1) : '0.0'}s / {HOLD_SECONDS.toFixed(1)}s
                   </span>
                 </div>
                 <Progress value={stableProgress} className="h-2" />
@@ -512,6 +542,11 @@ export const LiveMonitor = () => {
                 <div className="mt-1 text-muted-foreground">
                   {snapshot?.status_message || runtimeCapabilities?.live_monitor_reason || 'No live snapshot captured yet.'}
                 </div>
+                {snapshot ? (
+                  <div className="mt-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    Runtime state: <span className="text-foreground">{snapshot.status.replace('_', ' ')}</span>
+                  </div>
+                ) : null}
                 {snapshot?.image_path ? (
                   <div className="mt-2 text-xs text-muted-foreground">
                     Latest frame: <span className="text-foreground">{snapshot.image_path}</span>
@@ -628,7 +663,7 @@ export const LiveMonitor = () => {
                 <div className="rounded-xl border border-white/5 bg-muted/30 p-4 text-sm text-muted-foreground space-y-2">
                   <div className="flex items-center gap-2">
                     <Clock3 className="h-4 w-4 text-primary" />
-                    Stable for {snapshot?.tracking.stable_for_seconds?.toFixed(1) || '0.0'} seconds
+                    Stable for {snapshot && gateActive ? snapshot.tracking.stable_for_seconds.toFixed(1) : '0.0'} seconds
                   </div>
                   <div className="flex items-center gap-2">
                     {snapshot?.presence?.reference_scene_error ? (
@@ -686,10 +721,12 @@ export const LiveMonitor = () => {
                 <CardDescription>Once the object stays stable for 2 seconds, the classifier runs once for that object.</CardDescription>
               </CardHeader>
               <CardContent>
-                {snapshot?.prediction ? (
+                {snapshot?.prediction && (currentState !== 'standby' || snapshot.decision === 'low_confidence') ? (
                   <div className="space-y-4">
                     <div className="rounded-2xl border border-primary/10 bg-primary/5 p-5 text-center">
-                      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Category</div>
+                      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                        {snapshot.decision === 'low_confidence' ? 'Low-Confidence Attempt' : 'Category'}
+                      </div>
                       <div className="mt-2 font-heading text-3xl font-bold text-primary">
                         {getCategoryLabel(snapshot.prediction.category)}
                       </div>
@@ -701,10 +738,17 @@ export const LiveMonitor = () => {
                       <div>Inference: <span className="text-foreground">{snapshot.prediction.inference_time_ms.toFixed(0)} ms</span></div>
                       <div>Model source: <span className="text-foreground">{snapshot.prediction.model_source}</span></div>
                     </div>
+                    {snapshot.decision === 'low_confidence' ? (
+                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-500">
+                        Confidence stayed below the active threshold, so the runtime returned to standby and did not fire the locked-class popup.
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-white/5 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-                    No classification has been locked yet. Hold one item on the plate until the stability bar fills.
+                    {currentState === 'standby'
+                      ? 'Runtime is in standby. Place one item on the plate to start the 2-second gate.'
+                      : 'No classification has been locked yet. Hold one item on the plate until the stability bar fills.'}
                   </div>
                 )}
               </CardContent>

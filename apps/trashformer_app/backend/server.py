@@ -72,6 +72,16 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.on_event("startup")
+def startup_runtime() -> None:
+    if os.getenv("TRASHFORMER_AUTOSTART_RUNTIME", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return
+    try:
+        backend_main.start_runtime(**backend_main.get_default_runtime_start_args())
+    except Exception:
+        pass
+
+
 @app.on_event("shutdown")
 def shutdown_runtime() -> None:
     try:

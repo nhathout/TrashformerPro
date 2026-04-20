@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import site
+import sys
 import time
 from pathlib import Path
 
 from scripts.pi.hardware_config import BUZZER_GPIO_PIN, LED_GPIO_PINS
 
 DEFAULT_STANDBY_REMINDER_SECONDS = 15.0
-PASSIVE_BUZZER_LEVEL = 0.28
+PASSIVE_BUZZER_LEVEL = 0.48
 
 
 def milliseconds(value: float) -> float:
@@ -48,32 +50,32 @@ def bend_tone_steps(
 
 PASSIVE_PATTERNS: dict[str, list[tuple[float | None, float]]] = {
     "boot": [
-        *bend_tone_steps(750.0, 1000.0, 1.05, 15, 8),
-        (None, 0.10),
-        *bend_tone_steps(950.0, 1250.0, 1.05, 10, 8),
+        (261.63, 0.14),
+        (None, 0.06),
+        (392.00, 0.18),
     ],
     "shutdown": [
-        *tone_steps(329.63, 50, 30),
-        *tone_steps(880.00, 55, 25),
-        *tone_steps(659.25, 50, 60),
+        (392.00, 0.14),
+        (None, 0.06),
+        (261.63, 0.18),
     ],
-    "standby": [(246.94, 0.035)],
-    "alert": [(233.08, 0.10), (None, 0.04), (220.00, 0.10), (None, 0.04), (196.00, 0.20)],
-    "plastic": [(329.63, 0.08), (440.00, 0.10), (554.37, 0.16)],
-    "paper_cardboard": [(261.63, 0.10), (329.63, 0.10), (392.00, 0.14)],
-    "metal_glass": [(392.00, 0.08), (523.25, 0.10), (659.25, 0.16)],
-    "trash_other": [(293.66, 0.10), (246.94, 0.10), (196.00, 0.16)],
+    "standby": [(246.94, 0.03)],
+    "alert": [(220.00, 0.12), (None, 0.05), (220.00, 0.12), (None, 0.05), (196.00, 0.18)],
+    "plastic": [(523.25, 0.16)],
+    "paper_cardboard": [(349.23, 0.16)],
+    "metal_glass": [(659.25, 0.18)],
+    "trash_other": [(246.94, 0.18)],
 }
 
 ACTIVE_PATTERNS: dict[str, list[tuple[bool, float]]] = {
-    "boot": [(True, 0.05), (False, 0.03), (True, 0.05), (False, 0.03), (True, 0.09), (False, 0.04), (True, 0.12)],
-    "shutdown": [(True, 0.05), (False, 0.03), (True, 0.09), (False, 0.03), (True, 0.05)],
+    "boot": [(True, 0.12), (False, 0.06), (True, 0.18)],
+    "shutdown": [(True, 0.18), (False, 0.06), (True, 0.12)],
     "standby": [(True, 0.02)],
-    "alert": [(True, 0.10), (False, 0.05), (True, 0.10), (False, 0.05), (True, 0.12)],
-    "plastic": [(True, 0.05), (False, 0.04), (True, 0.09)],
-    "paper_cardboard": [(True, 0.08), (False, 0.04), (True, 0.08)],
-    "metal_glass": [(True, 0.04), (False, 0.03), (True, 0.04), (False, 0.03), (True, 0.10)],
-    "trash_other": [(True, 0.12), (False, 0.05), (True, 0.06)],
+    "alert": [(True, 0.12), (False, 0.05), (True, 0.12), (False, 0.05), (True, 0.18)],
+    "plastic": [(True, 0.12)],
+    "paper_cardboard": [(True, 0.12)],
+    "metal_glass": [(True, 0.15)],
+    "trash_other": [(True, 0.18)],
 }
 
 
@@ -89,9 +91,21 @@ def import_gpiozero():
     try:
         from gpiozero import Buzzer, LED, PWMOutputDevice  # type: ignore
     except ImportError as exc:
-        raise RuntimeError(
-            "gpiozero is not installed for this Python interpreter. Run `bash scripts/pi/setup_pi.sh` first."
-        ) from exc
+        version = f"{sys.version_info.major}.{sys.version_info.minor}"
+        candidate_paths = [
+            Path("/usr/lib/python3/dist-packages"),
+            Path(f"/usr/lib/python{version}/dist-packages"),
+            Path(f"/usr/local/lib/python{version}/dist-packages"),
+        ]
+        for candidate in candidate_paths:
+            if candidate.exists():
+                site.addsitedir(str(candidate))
+        try:
+            from gpiozero import Buzzer, LED, PWMOutputDevice  # type: ignore
+        except ImportError as second_exc:
+            raise RuntimeError(
+                "gpiozero is not installed for this Python interpreter. Run `bash scripts/pi/setup_pi.sh` first."
+            ) from second_exc
     return LED, Buzzer, PWMOutputDevice
 
 
@@ -133,6 +147,10 @@ class HardwareController:
         for led in self.leds.values():
             led.off()
 
+    def all_leds_on(self) -> None:
+        for led in self.leds.values():
+            led.on()
+
     def flash_all_leds(self, cycles: int, cycle_seconds: float) -> None:
         on_seconds = max(cycle_seconds / 2.0, 0.0)
         off_seconds = max(cycle_seconds - on_seconds, 0.0)
@@ -143,15 +161,21 @@ class HardwareController:
             self.all_leds_off()
             time.sleep(off_seconds)
 
-    def indicate_category(self, category: str, hold_seconds: float) -> None:
+    def indicate_boot(self) -> None:
+        self.all_leds_on()
+        self.play_sound("boot")
         self.all_leds_off()
-        led = self.leds[category]
-        led.on()
-        sound_duration = self.play_sound(category)
-        remaining = max(hold_seconds - sound_duration, 0.0)
-        if remaining > 0:
-            time.sleep(remaining)
-        led.off()
+
+    def indicate_category(self, category: str, hold_seconds: float) -> None:
+        for name, led in self.leds.items():
+            if name == category:
+                led.on()
+            else:
+                led.off()
+        self.play_sound(category)
+
+    def indicate_tracking(self) -> None:
+        self.all_leds_on()
 
     def indicate_standby(self, reminder_interval_seconds: float | None = None) -> None:
         self.all_leds_off()

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import copy
 import fcntl
 import hashlib
@@ -43,6 +42,8 @@ DEFAULT_STABLE_HOLD_SECONDS = 2.0
 DEFAULT_LOOP_INTERVAL = 1.0
 DEFAULT_CATEGORY_HOLD_SECONDS = 2.0
 DEFAULT_STANDBY_REMINDER_SECONDS = 20.0
+DEFAULT_MIN_CONFIDENCE = 0.60
+DEFAULT_CAMERA_TIMEOUT_MS = 1000
 CLASSIFICATION_IOU_THRESHOLD = 0.45
 
 
@@ -57,12 +58,12 @@ class RuntimeLockError(RuntimeError):
 @dataclass(frozen=True)
 class PresenceConfig:
     resize: int = 256
-    pixel_threshold: int = 18
-    ratio_threshold: float = 0.015
-    mean_threshold: float = 8.0
+    pixel_threshold: int = 16
+    ratio_threshold: float = 0.01
+    mean_threshold: float = 6.0
     scene_error_border_fraction: float = 0.18
-    scene_error_ratio_threshold: float = 0.12
-    scene_error_mean_threshold: float = 14.0
+    scene_error_ratio_threshold: float = 0.18
+    scene_error_mean_threshold: float = 18.0
 
 
 @dataclass(frozen=True)
@@ -82,7 +83,7 @@ class RuntimeConfig:
     classifier_python: Path = DEFAULT_CLASSIFIER_PYTHON
     classifier_device: str = "cpu"
     top_k: int = 4
-    min_confidence: float = 0.70
+    min_confidence: float = DEFAULT_MIN_CONFIDENCE
     capture_prefix: str = "runtime"
     latest_capture_path: Path = DEFAULT_LIVE_CAPTURE_PATH
     camera_args: tuple[str, ...] = ()
@@ -102,10 +103,15 @@ class RuntimeConfig:
 class PresenceAnalysis:
     has_core_foreground: bool
     reference_scene_error: bool
+    object_too_close: bool
     mean_diff: float
     changed_ratio: float
+    core_mean_diff: float
+    core_changed_ratio: float
     border_mean_diff: float
     border_changed_ratio: float
+    bbox_area_ratio: float
+    bbox_fill_ratio: float
     bbox_pixels: tuple[int, int, int, int] | None
     bbox: dict[str, float] | None
     analysis_width: int
@@ -133,10 +139,6 @@ class PredictionEvent:
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _image_to_data_url(image_data: bytes) -> str:
-    return f"data:image/jpeg;base64,{base64.b64encode(image_data).decode('ascii')}"
 
 
 def _normalize_bbox(
@@ -222,6 +224,50 @@ def _analysis_arrays(image: Image.Image, reference_path: Path, resize: int) -> t
     )
 
 
+def _map_bbox_to_image(
+    bbox: tuple[int, int, int, int],
+    *,
+    analysis_width: int,
+    analysis_height: int,
+    image_width: int,
+    image_height: int,
+    padding_ratio: float = 0.12,
+) -> tuple[int, int, int, int]:
+    x0, y0, x1, y1 = bbox
+    scale_x = image_width / analysis_width
+    scale_y = image_height / analysis_height
+
+    left = int(x0 * scale_x)
+    top = int(y0 * scale_y)
+    right = int((x1 + 1) * scale_x) - 1
+    bottom = int((y1 + 1) * scale_y) - 1
+
+    width = max(right - left + 1, 1)
+    height = max(bottom - top + 1, 1)
+    pad_x = max(int(width * padding_ratio), 6)
+    pad_y = max(int(height * padding_ratio), 6)
+
+    left = max(left - pad_x, 0)
+    top = max(top - pad_y, 0)
+    right = min(right + pad_x, image_width - 1)
+    bottom = min(bottom + pad_y, image_height - 1)
+    return left, top, right, bottom
+
+
+def _crop_image_for_presence(image: Image.Image, presence: PresenceAnalysis | None) -> Image.Image:
+    if presence is None or presence.bbox_pixels is None:
+        return image.copy()
+
+    left, top, right, bottom = _map_bbox_to_image(
+        presence.bbox_pixels,
+        analysis_width=presence.analysis_width,
+        analysis_height=presence.analysis_height,
+        image_width=image.width,
+        image_height=image.height,
+    )
+    return image.crop((left, top, right + 1, bottom + 1)).copy()
+
+
 def analyze_frame_against_reference(
     image: Image.Image,
     *,
@@ -243,23 +289,53 @@ def analyze_frame_against_reference(
 
     border_mean_diff = float(difference[border_mask].mean())
     border_changed_ratio = float(changed_mask[border_mask].mean())
+    core_region_mask = ~border_mask
+    core_mean_diff = float(difference[core_region_mask].mean())
+    core_changed_ratio = float(changed_mask[core_region_mask].mean())
     bbox_pixels = _extract_bbox(changed_mask, border_pixels)
-    has_core_foreground = bbox_pixels is not None and (
-        changed_ratio >= presence.ratio_threshold or mean_diff >= presence.mean_threshold
+    bbox_area_ratio = 0.0
+    bbox_fill_ratio = 0.0
+    if bbox_pixels is not None:
+        x0, y0, x1, y1 = bbox_pixels
+        bbox_area = float((x1 - x0 + 1) * (y1 - y0 + 1))
+        bbox_area_ratio = bbox_area / float(analysis_width * analysis_height)
+        bbox_fill_ratio = float(changed_mask[y0 : y1 + 1, x0 : x1 + 1].mean())
+
+    has_core_candidate = (
+        bbox_pixels is not None
+        and bbox_fill_ratio >= 0.15
+        and bbox_area_ratio >= 0.002
+    )
+    has_core_foreground = has_core_candidate and (
+        core_changed_ratio >= max(presence.ratio_threshold * 0.35, 0.004)
+        or core_mean_diff >= max(presence.mean_threshold * 0.5, 4.0)
+        or bbox_area_ratio >= 0.01
+    )
+    object_too_close = has_core_foreground and (
+        bbox_area_ratio >= 0.40
+        and border_changed_ratio >= max(presence.scene_error_ratio_threshold * 0.75, 0.12)
     )
     reference_scene_error = (
-        not has_core_foreground
-        and border_changed_ratio >= presence.scene_error_ratio_threshold
-        and border_mean_diff >= presence.scene_error_mean_threshold
+        object_too_close
+        or (
+            not has_core_foreground
+            and border_changed_ratio >= presence.scene_error_ratio_threshold
+            and border_mean_diff >= presence.scene_error_mean_threshold
+        )
     )
 
     return PresenceAnalysis(
         has_core_foreground=has_core_foreground,
         reference_scene_error=reference_scene_error,
+        object_too_close=object_too_close,
         mean_diff=round(mean_diff, 2),
         changed_ratio=round(changed_ratio, 4),
+        core_mean_diff=round(core_mean_diff, 2),
+        core_changed_ratio=round(core_changed_ratio, 4),
         border_mean_diff=round(border_mean_diff, 2),
         border_changed_ratio=round(border_changed_ratio, 4),
+        bbox_area_ratio=round(bbox_area_ratio, 4),
+        bbox_fill_ratio=round(bbox_fill_ratio, 4),
         bbox_pixels=bbox_pixels,
         bbox=_normalize_bbox(bbox_pixels, width=analysis_width, height=analysis_height),
         analysis_width=analysis_width,
@@ -296,6 +372,8 @@ class PiRuntimeEngine:
         self._last_prediction: PredictionEvent | None = None
         self._last_error = ""
         self._capture_failures = 0
+        self._last_console_state: str | None = None
+        self._last_console_event_id: str | None = None
 
     def _build_idle_snapshot(self) -> dict[str, Any]:
         return {
@@ -314,6 +392,8 @@ class PiRuntimeEngine:
                 "required_hold_seconds": float(self.config.stable_hold_seconds),
                 "object_id": None,
             },
+            "decision": None,
+            "confidence_passed": False,
             "classification_triggered": False,
             "classification_event_id": None,
             "saved_capture_path": None,
@@ -363,7 +443,7 @@ class PiRuntimeEngine:
 
             if self._hardware is not None:
                 try:
-                    self._hardware.play_sound("boot")
+                    self._hardware.indicate_boot()
                 except Exception as exc:
                     self._disable_hardware(f"Boot output failed: {exc}")
 
@@ -512,8 +592,11 @@ class PiRuntimeEngine:
         latest_capture_path = resolve_repo_path(self.config.latest_capture_path)
         latest_capture_path.parent.mkdir(parents=True, exist_ok=True)
         command = ["rpicam-still", "--nopreview", "-o", str(latest_capture_path)]
-        if self.config.camera_args:
-            command.extend(self.config.camera_args)
+        camera_args = list(self.config.camera_args)
+        if "--timeout" not in camera_args:
+            camera_args.extend(["--timeout", str(DEFAULT_CAMERA_TIMEOUT_MS)])
+        if camera_args:
+            command.extend(camera_args)
 
         started_at = time.time()
         subprocess.run(command, check=True)
@@ -543,15 +626,22 @@ class PiRuntimeEngine:
         if presence is not None and presence.reference_scene_error:
             self._reset_tracking()
             self._apply_outputs("scene_error", None, None)
+            scene_error_message = (
+                "Object is too close to the camera or the plate framing changed too much."
+                if presence.object_too_close
+                else "Plate moved, disappeared, or framing changed too much."
+            )
             self._record_state(
                 state="scene_error",
-                status_message="Plate moved, disappeared, or framing changed too much.",
+                status_message=scene_error_message,
                 error="",
                 image_path=image_path,
                 image_data=image_data,
                 capture_time_ms=capture_time_ms,
                 presence=presence,
                 prediction=None,
+                decision=None,
+                confidence_passed=False,
                 classification_triggered=False,
                 classification_event_id=None,
                 saved_capture_path=None,
@@ -581,6 +671,8 @@ class PiRuntimeEngine:
                 capture_time_ms=capture_time_ms,
                 presence=presence,
                 prediction=None,
+                decision=None,
+                confidence_passed=False,
                 classification_triggered=False,
                 classification_event_id=None,
                 saved_capture_path=None,
@@ -612,6 +704,8 @@ class PiRuntimeEngine:
                 capture_time_ms=capture_time_ms,
                 presence=presence,
                 prediction=None,
+                decision=None,
+                confidence_passed=False,
                 classification_triggered=False,
                 classification_event_id=None,
                 saved_capture_path=None,
@@ -630,12 +724,14 @@ class PiRuntimeEngine:
                 capture_time_ms=capture_time_ms,
                 presence=presence,
                 prediction=None,
+                decision=None,
+                confidence_passed=False,
                 classification_triggered=False,
                 classification_event_id=None,
                 saved_capture_path=None,
                 tracking=tracking,
             )
-            prediction_event = self._classify_current_object(image_path, object_id)
+            prediction_event = self._classify_current_object(image_path, image, object_id, presence)
             self._last_prediction = prediction_event
             fresh_prediction = True
             if self.prediction_callback is not None:
@@ -654,14 +750,19 @@ class PiRuntimeEngine:
             "model_name": prediction_event.result.get("model_name", ""),
             "inference_time_ms": prediction_event.result.get("inference_time_ms", 0.0),
         }
+        terminal_tracking = {
+            "stable_for_seconds": 0.0,
+            "required_hold_seconds": self.config.stable_hold_seconds,
+            "object_id": None,
+        }
 
-        next_state = "low_confidence" if is_low_confidence else "classified"
+        next_state = "standby" if is_low_confidence else "classified"
         next_message = (
-            "Prediction confidence below threshold. Returning to neutral standby."
+            "Prediction confidence below threshold. Returning to standby."
             if is_low_confidence
             else "Object held steady long enough. Classification locked."
         )
-        self._apply_outputs(next_state, runtime_prediction, object_id)
+        self._apply_outputs("standby" if is_low_confidence else next_state, runtime_prediction, object_id)
         self._record_state(
             state=next_state,
             status_message=next_message,
@@ -671,15 +772,17 @@ class PiRuntimeEngine:
             capture_time_ms=capture_time_ms,
             presence=presence,
             prediction=runtime_prediction,
-            classification_triggered=fresh_prediction,
-            classification_event_id=prediction_event.event_id if fresh_prediction else None,
+            decision="low_confidence" if is_low_confidence else "classified",
+            confidence_passed=not is_low_confidence,
+            classification_triggered=fresh_prediction and not is_low_confidence,
+            classification_event_id=prediction_event.event_id if fresh_prediction and not is_low_confidence else None,
             saved_capture_path=prediction_event.archived_image_path,
-            tracking=tracking,
+            tracking=terminal_tracking,
         )
         if fresh_prediction:
             self._log_event(
                 image_path=resolve_repo_path(Path(prediction_event.archived_image_path)),
-                outcome=next_state,
+                outcome="low_confidence" if is_low_confidence else next_state,
                 reason="low_confidence" if is_low_confidence else "classified",
                 presence=presence,
                 prediction=prediction_event.result,
@@ -702,10 +805,20 @@ class PiRuntimeEngine:
         self._last_object_id = object_id
         return object_id
 
-    def _classify_current_object(self, latest_image_path: Path, object_id: str) -> PredictionEvent:
-        archived_path = CAPTURES_DIR / f"{self.config.capture_prefix}_locked_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.jpg"
+    def _classify_current_object(
+        self,
+        latest_image_path: Path,
+        image: Image.Image,
+        object_id: str,
+        presence: PresenceAnalysis | None,
+    ) -> PredictionEvent:
+        capture_stem = f"{self.config.capture_prefix}_locked_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+        archived_full_path = CAPTURES_DIR / f"{capture_stem}_full.jpg"
+        archived_path = CAPTURES_DIR / f"{capture_stem}.jpg"
         archived_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(latest_image_path, archived_path)
+        shutil.copy2(latest_image_path, archived_full_path)
+        crop_image = _crop_image_for_presence(image, presence)
+        crop_image.save(archived_path, format="JPEG", quality=95)
         checkpoint_path = resolve_checkpoint_path(self.config.checkpoint_path)
         classifier_python = resolve_repo_path(self.config.classifier_python)
 
@@ -758,6 +871,8 @@ class PiRuntimeEngine:
         capture_time_ms: float,
         presence: PresenceAnalysis | None,
         prediction: dict[str, Any] | None,
+        decision: str | None,
+        confidence_passed: bool,
         classification_triggered: bool,
         classification_event_id: str | None,
         saved_capture_path: str | None,
@@ -770,11 +885,13 @@ class PiRuntimeEngine:
             status=state,
             status_message=status_message,
             error=error,
-            image_b64=_image_to_data_url(image_data) if image_data else "",
+            image_b64="",
             image_path=repo_relative(image_path) if image_path is not None else None,
             prediction=prediction,
             presence=presence.to_snapshot() if presence is not None else None,
             tracking=tracking,
+            decision=decision,
+            confidence_passed=confidence_passed,
             classification_triggered=classification_triggered,
             classification_event_id=classification_event_id,
             saved_capture_path=saved_capture_path,
@@ -785,6 +902,28 @@ class PiRuntimeEngine:
             ),
             capture_time_ms=capture_time_ms,
         )
+        if state != self._last_console_state:
+            print(f"[runtime] {state}: {status_message}")
+            if presence is not None:
+                print(
+                    "[runtime][presence]"
+                    f" mean={presence.mean_diff:.2f}"
+                    f" core_mean={presence.core_mean_diff:.2f}"
+                    f" changed={presence.changed_ratio:.4f}"
+                    f" core_changed={presence.core_changed_ratio:.4f}"
+                    f" border_changed={presence.border_changed_ratio:.4f}"
+                    f" bbox_area={presence.bbox_area_ratio:.4f}"
+                    f" bbox_fill={presence.bbox_fill_ratio:.4f}"
+                )
+            self._last_console_state = state
+        if error:
+            print(f"[runtime][error] {error}")
+        if classification_event_id and classification_event_id != self._last_console_event_id and prediction is not None:
+            print(
+                "[runtime][classification]"
+                f" {prediction['category']} ({float(prediction['confidence']):.4f})"
+            )
+            self._last_console_event_id = classification_event_id
 
     def _apply_outputs(
         self,
@@ -826,6 +965,12 @@ class PiRuntimeEngine:
                 self._last_output_object_id = object_id
                 return
 
+            if state in {"tracking", "classifying"}:
+                self._hardware.indicate_tracking()
+                self._last_output_state = state
+                self._last_output_object_id = object_id
+                return
+
             if state in {"standby", "low_confidence"}:
                 self._hardware.indicate_standby(self.config.hardware.standby_reminder_seconds)
                 self._last_output_state = state
@@ -850,6 +995,8 @@ class PiRuntimeEngine:
             capture_time_ms=0.0,
             presence=None,
             prediction=None,
+            decision=None,
+            confidence_passed=False,
             classification_triggered=False,
             classification_event_id=None,
             saved_capture_path=None,

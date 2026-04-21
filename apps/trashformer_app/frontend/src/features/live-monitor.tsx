@@ -3,7 +3,6 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
-import { Switch } from '../components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -366,7 +365,6 @@ export const LiveMonitor = () => {
     : 0;
 
   const liveMonitorSupported = runtimeCapabilities?.live_monitor_supported ?? true;
-  const hardwareOutputsAvailable = runtimeCapabilities?.hardware_outputs_available ?? false;
   const currentState = snapshot?.status || 'standby';
   const showClassBadge = Boolean(snapshot?.prediction) && (
     currentState === 'classified' || snapshot?.decision === 'low_confidence'
@@ -468,19 +466,6 @@ export const LiveMonitor = () => {
                   </Button>
                 </div>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-white/5 bg-muted/20 p-3">
-                <div>
-                  <div className="text-sm font-medium text-foreground">Mirror Pi LEDs + buzzer</div>
-                  <div className="text-xs text-muted-foreground">
-                    Uses the same shared Pi runtime to drive LEDs and buzzer during the app demo.
-                  </div>
-                </div>
-                <Switch
-                  checked={hardwareOutputsEnabled}
-                  disabled={!hardwareOutputsAvailable}
-                  onCheckedChange={setHardwareOutputsEnabled}
-                />
-              </div>
             </CardHeader>
             <CardContent className="p-6 space-y-5">
               <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 bg-muted/40">
@@ -581,74 +566,6 @@ export const LiveMonitor = () => {
             <Card className="border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl">
               <CardHeader>
                 <CardTitle className="font-heading flex items-center gap-2">
-                  <Camera className="h-5 w-5 text-primary" />
-                  Backend Mode
-                </CardTitle>
-                <CardDescription>Separates general website features from Pi-only camera and GPIO features.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Badge variant="outline" className={cn(getStatusBadgeClass(liveMonitorSupported ? 'tracking' : 'standby'))}>
-                  {liveMonitorSupported ? 'PI CAMERA MODE AVAILABLE' : 'UPLOAD / WEBSITE MODE ONLY'}
-                </Badge>
-                <div className="rounded-xl border border-white/5 bg-muted/30 p-4 text-sm text-muted-foreground space-y-2">
-                  <div>
-                    Host: <span className="text-foreground">{runtimeCapabilities?.host.pi_model || runtimeCapabilities?.host.platform || 'unknown'}</span>
-                  </div>
-                  <div>
-                    Live Monitor: <span className="text-foreground">{runtimeCapabilities?.live_monitor_supported ? 'available' : 'unavailable'}</span>
-                  </div>
-                  <div>
-                    GPIO outputs: <span className="text-foreground">{runtimeCapabilities?.hardware_outputs_available ? 'available' : 'unavailable'}</span>
-                  </div>
-                </div>
-                <div className="rounded-xl border border-white/5 bg-muted/30 p-4 text-sm text-muted-foreground">
-                  {runtimeCapabilities?.live_monitor_reason || 'Checking backend capabilities...'}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl">
-              <CardHeader>
-                <CardTitle className="font-heading flex items-center gap-2">
-                  <Cpu className="h-5 w-5 text-primary" />
-                  Model Status
-                </CardTitle>
-                <CardDescription>Confirms whether the real checkpoint is loaded or the app is in demo mode.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Badge variant="outline" className={cn(getStatusBadgeClass(modelStatus?.ready ? 'classified' : 'degraded'))}>
-                  {modelStatus?.ready ? 'REAL CHECKPOINT READY' : modelStatus?.using_mock ? 'DEMO MODE' : 'MODEL ERROR'}
-                </Badge>
-                <div className="text-sm text-muted-foreground">
-                  {modelStatus?.message || 'Checking model status...'}
-                </div>
-                <div className="rounded-xl border border-white/5 bg-muted/30 p-4 text-sm space-y-2">
-                  <div>
-                    <span className="text-muted-foreground">Checkpoint:</span>{' '}
-                    <span className="text-foreground">{modelStatus?.checkpoint_path || 'not found'}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Model:</span>{' '}
-                    <span className="text-foreground">{modelStatus?.model_name || 'n/a'}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">SHA:</span>{' '}
-                    <span className="text-foreground">
-                      {modelStatus?.checkpoint_sha256 ? modelStatus.checkpoint_sha256.slice(0, 12) : 'n/a'}
-                    </span>
-                  </div>
-                </div>
-                {modelStatus?.error ? (
-                  <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-500">
-                    {modelStatus.error}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-
-            <Card className="border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl">
-              <CardHeader>
-                <CardTitle className="font-heading flex items-center gap-2">
                   <ScanSearch className="h-5 w-5 text-primary" />
                   Tracking
                 </CardTitle>
@@ -691,39 +608,6 @@ export const LiveMonitor = () => {
             <Card className="border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl">
               <CardHeader>
                 <CardTitle className="font-heading flex items-center gap-2">
-                  <Cpu className="h-5 w-5 text-primary" />
-                  Hardware Mirror
-                </CardTitle>
-                <CardDescription>Optional Pi-only output mode for LEDs and buzzer during the app demo.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Badge variant="outline" className={cn(getStatusBadgeClass(snapshot?.hardware?.enabled ? 'tracking' : 'standby'))}>
-                  {snapshot?.hardware?.enabled ? 'OUTPUTS ENABLED' : hardwareOutputsAvailable ? 'OUTPUTS DISABLED' : 'PI OUTPUTS UNAVAILABLE'}
-                </Badge>
-                <div className="rounded-xl border border-white/5 bg-muted/30 p-4 text-sm text-muted-foreground space-y-2">
-                  <div>
-                    Action: <span className="text-foreground">{snapshot?.hardware?.action || 'idle'}</span>
-                  </div>
-                  <div>
-                    Buzzer: <span className="text-foreground">{snapshot?.hardware?.buzzer_mode || 'passive'}</span>
-                  </div>
-                </div>
-                {!hardwareOutputsAvailable ? (
-                  <div className="rounded-xl border border-white/5 bg-muted/30 p-4 text-sm text-muted-foreground">
-                    {runtimeCapabilities?.hardware_outputs_reason || 'GPIO outputs are not available on this backend.'}
-                  </div>
-                ) : null}
-                {snapshot?.hardware?.error ? (
-                  <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-500">
-                    {snapshot.hardware.error}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-
-            <Card className="border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl">
-              <CardHeader>
-                <CardTitle className="font-heading flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5 text-primary" />
                   Current Prediction
                 </CardTitle>
@@ -760,6 +644,45 @@ export const LiveMonitor = () => {
                       : 'No classification has been locked yet. Hold one item on the plate until the stability bar fills.'}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl">
+              <CardHeader>
+                <CardTitle className="font-heading flex items-center gap-2">
+                  <Cpu className="h-5 w-5 text-primary" />
+                  Model Status
+                </CardTitle>
+                <CardDescription>Confirms whether the real checkpoint is loaded or the app is in demo mode.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Badge variant="outline" className={cn(getStatusBadgeClass(modelStatus?.ready ? 'classified' : 'degraded'))}>
+                  {modelStatus?.ready ? 'REAL CHECKPOINT READY' : modelStatus?.using_mock ? 'DEMO MODE' : 'MODEL ERROR'}
+                </Badge>
+                <div className="text-sm text-muted-foreground">
+                  {modelStatus?.message || 'Checking model status...'}
+                </div>
+                <div className="rounded-xl border border-white/5 bg-muted/30 p-4 text-sm space-y-2">
+                  <div>
+                    <span className="text-muted-foreground">Checkpoint:</span>{' '}
+                    <span className="text-foreground">{modelStatus?.checkpoint_path || 'not found'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Model:</span>{' '}
+                    <span className="text-foreground">{modelStatus?.model_name || 'n/a'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">SHA:</span>{' '}
+                    <span className="text-foreground">
+                      {modelStatus?.checkpoint_sha256 ? modelStatus.checkpoint_sha256.slice(0, 12) : 'n/a'}
+                    </span>
+                  </div>
+                </div>
+                {modelStatus?.error ? (
+                  <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-500">
+                    {modelStatus.error}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </div>

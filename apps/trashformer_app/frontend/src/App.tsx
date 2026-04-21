@@ -180,15 +180,15 @@ const App: React.FC = () => {
                   <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center">
                     <ShieldCheck className="h-6 w-6 text-blue-500" />
                   </div>
-                  <h3 className="font-heading font-bold text-lg">98% Accuracy</h3>
-                  <p className="text-sm text-muted-foreground">Advanced convolutional neural networks trained on 100k+ waste samples.</p>
+                  <h3 className="font-heading font-bold text-lg">95% Accuracy</h3>
+                  <p className="text-sm text-muted-foreground">MobileNetV3 classifier evaluated on a held-out four-class waste dataset.</p>
                 </div>
                 <div className="p-6 rounded-2xl bg-card/40 backdrop-blur-sm border border-white/5 space-y-3 flex flex-col items-center text-center">
                   <div className="h-12 w-12 rounded-full bg-amber-500/10 flex items-center justify-center">
                     <Zap className="h-6 w-6 text-amber-500" />
                   </div>
-                  <h3 className="font-heading font-bold text-lg">Real-Time Speed</h3>
-                  <p className="text-sm text-muted-foreground">Inference times under 100ms optimized for Raspberry Pi and edge hardware.</p>
+                  <h3 className="font-heading font-bold text-lg">2s Stability Gate</h3>
+                  <p className="text-sm text-muted-foreground">Pi runtime captures frames, checks foreground change, then classifies after a stable 2-second hold.</p>
                 </div>
                 <div className="p-6 rounded-2xl bg-card/40 backdrop-blur-sm border border-white/5 space-y-3 flex flex-col items-center text-center">
                   <div className="h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
@@ -212,7 +212,7 @@ const App: React.FC = () => {
           <div className="flex flex-col md:flex-row justify-between items-center gap-8">
             <div className="flex items-center gap-3 grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all duration-500">
               <Leaf className="h-5 w-5 text-primary" />
-              <span className="font-heading font-bold text-muted-foreground">TrashformerPro <span className="text-[10px] ml-1">v2.4.0</span></span>
+              <span className="font-heading font-bold text-muted-foreground">TrashformerPro <span className="text-[10px] ml-1">v0.0.3</span></span>
             </div>
             
             <div className="flex items-center gap-6">

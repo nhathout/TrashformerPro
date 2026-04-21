@@ -119,6 +119,7 @@ That runtime:
 - archives classification-attempt frames into `runtime/captures/`
 - writes classification attempts to `runtime/inference_records/predictions.csv`
 - only shows the locked-class popup when a prediction passes the active confidence threshold
+- lights the guessed class LED after low-confidence attempts, but skips the popup and category sound
 - returns to `standby` after low-confidence attempts while still exposing the low-confidence result in the status cards
 
 Important:
@@ -166,6 +167,12 @@ Start the default tandem mode:
 
 ```bash
 bash scripts/pi/start_tandem_demo.sh
+```
+
+If your buzzer stays silent in tandem mode, retry with:
+
+```bash
+TRASHFORMER_RUNTIME_BUZZER_MODE=active bash scripts/pi/start_tandem_demo.sh
 ```
 
 This starts:

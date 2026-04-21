@@ -278,7 +278,6 @@ export const LiveMonitor = () => {
             camera_width: 1280,
             camera_height: 720,
             drive_outputs: hardwareOutputsEnabled,
-            hardware_buzzer_mode: 'passive',
             standby_reminder_seconds: 20,
             category_hold_seconds: 2.0,
             min_confidence: MIN_CONFIDENCE,
@@ -343,7 +342,6 @@ export const LiveMonitor = () => {
           camera_width: 1280,
           camera_height: 720,
           drive_outputs: hardwareOutputsEnabled,
-          hardware_buzzer_mode: 'passive',
           standby_reminder_seconds: 20,
           category_hold_seconds: 2.0,
           min_confidence: MIN_CONFIDENCE,
@@ -370,6 +368,9 @@ export const LiveMonitor = () => {
   const liveMonitorSupported = runtimeCapabilities?.live_monitor_supported ?? true;
   const hardwareOutputsAvailable = runtimeCapabilities?.hardware_outputs_available ?? false;
   const currentState = snapshot?.status || 'standby';
+  const showClassBadge = Boolean(snapshot?.prediction) && (
+    currentState === 'classified' || snapshot?.decision === 'low_confidence'
+  );
 
   return (
     <>
@@ -505,9 +506,17 @@ export const LiveMonitor = () => {
                       <Badge variant="outline" className={cn('backdrop-blur-md', getStatusBadgeClass(snapshot.status))}>
                         {snapshot.status.replace('_', ' ').toUpperCase()}
                       </Badge>
-                      {snapshot.prediction ? (
-                        <Badge className="bg-primary text-primary-foreground">
-                          {getCategoryLabel(snapshot.prediction.category)}
+                      {showClassBadge && snapshot?.prediction ? (
+                        <Badge
+                          className={
+                            snapshot.decision === 'low_confidence'
+                              ? 'bg-amber-500/90 text-black'
+                              : 'bg-primary text-primary-foreground'
+                          }
+                        >
+                          {snapshot.decision === 'low_confidence'
+                            ? `Low Conf: ${getCategoryLabel(snapshot.prediction.category)}`
+                            : getCategoryLabel(snapshot.prediction.category)}
                         </Badge>
                       ) : null}
                     </div>

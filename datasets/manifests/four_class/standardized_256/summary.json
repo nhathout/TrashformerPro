@@ -1,5 +1,5 @@
 {
-  "created_at_utc": "2026-04-12T22:59:53.027030+00:00",
+  "created_at_utc": "2026-04-21T01:21:47.426710+00:00",
   "variant": "standardized_256",
   "source_root": "data/raw/garbage_v2",
   "mapping_path": "datasets/mappings/four_class_map.yaml",

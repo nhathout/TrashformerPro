@@ -8,7 +8,7 @@ from pathlib import Path
 from scripts.pi.hardware_config import BUZZER_GPIO_PIN, LED_GPIO_PINS
 
 DEFAULT_STANDBY_REMINDER_SECONDS = 15.0
-PASSIVE_BUZZER_LEVEL = 0.48
+PASSIVE_BUZZER_LEVEL = 1.0
 
 
 def milliseconds(value: float) -> float:
@@ -167,12 +167,15 @@ class HardwareController:
         self.all_leds_off()
 
     def indicate_category(self, category: str, hold_seconds: float) -> None:
+        self.indicate_category_led(category)
+        self.play_sound(category)
+
+    def indicate_category_led(self, category: str) -> None:
         for name, led in self.leds.items():
             if name == category:
                 led.on()
             else:
                 led.off()
-        self.play_sound(category)
 
     def indicate_tracking(self) -> None:
         self.all_leds_on()

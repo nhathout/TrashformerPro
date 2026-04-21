@@ -762,7 +762,7 @@ class PiRuntimeEngine:
             if is_low_confidence
             else "Object held steady long enough. Classification locked."
         )
-        self._apply_outputs("standby" if is_low_confidence else next_state, runtime_prediction, object_id)
+        self._apply_outputs("low_confidence" if is_low_confidence else next_state, runtime_prediction, object_id)
         self._record_state(
             state=next_state,
             status_message=next_message,
@@ -965,13 +965,20 @@ class PiRuntimeEngine:
                 self._last_output_object_id = object_id
                 return
 
+            if state == "low_confidence" and prediction and object_id:
+                if self._last_output_state != "low_confidence" or self._last_output_object_id != object_id:
+                    self._hardware.indicate_category_led(prediction["category"])
+                self._last_output_state = "low_confidence"
+                self._last_output_object_id = object_id
+                return
+
             if state in {"tracking", "classifying"}:
                 self._hardware.indicate_tracking()
                 self._last_output_state = state
                 self._last_output_object_id = object_id
                 return
 
-            if state in {"standby", "low_confidence"}:
+            if state == "standby":
                 self._hardware.indicate_standby(self.config.hardware.standby_reminder_seconds)
                 self._last_output_state = state
                 self._last_output_object_id = None

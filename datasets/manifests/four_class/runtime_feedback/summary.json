@@ -1,0 +1,42 @@
+{
+  "created_at_utc": "2026-04-21T01:21:47.580487+00:00",
+  "predictions_csv": "runtime/inference_records/predictions.csv",
+  "base_manifests": {
+    "train": "datasets/manifests/four_class/standardized_256/train.csv",
+    "val": "datasets/manifests/four_class/standardized_256/val.csv",
+    "test": "datasets/manifests/four_class/standardized_256/test.csv"
+  },
+  "output_files": {
+    "feedback_train": "datasets/manifests/four_class/runtime_feedback/feedback_train.csv",
+    "feedback_val": "datasets/manifests/four_class/runtime_feedback/feedback_val.csv",
+    "feedback_test": "datasets/manifests/four_class/runtime_feedback/feedback_test.csv",
+    "feedback_all": "datasets/manifests/four_class/runtime_feedback/feedback_all.csv",
+    "combined_train": "datasets/manifests/four_class/runtime_feedback/train.csv",
+    "combined_val": "datasets/manifests/four_class/runtime_feedback/val.csv",
+    "combined_test": "datasets/manifests/four_class/runtime_feedback/test.csv"
+  },
+  "selection_stats": {
+    "total_rows": 47,
+    "rows_without_confirmed_label": 39,
+    "duplicate_confirmed_rows": 0
+  },
+  "feedback_examples_total": 8,
+  "feedback_examples_by_class": {
+    "metal_glass": 2,
+    "paper_cardboard": 1,
+    "trash_other": 5
+  },
+  "feedback_examples_by_split": {
+    "train": 7,
+    "val": 1,
+    "test": 0
+  },
+  "combined_examples_by_split": {
+    "train": 8585,
+    "val": 1834,
+    "test": 1848
+  },
+  "missing_images_count": 0,
+  "missing_images": [],
+  "seed": 42
+}

@@ -203,7 +203,8 @@ Runtime states:
 Low-confidence behavior:
 
 - the classifier still archives the frame and logs the prediction attempt
-- LEDs and buzzer return to standby behavior instead of showing a category
+- the guessed class LED turns on so the hardware mirrors the web-app attempt
+- the buzzer stays silent and the popup stays hidden unless the confidence threshold passed
 - the web app does not show the locked-class popup unless the confidence threshold passed
 
 Useful options:
@@ -230,6 +231,13 @@ Start it on the Pi with:
 ```bash
 cd ~/TrashformerPro
 bash scripts/pi/start_tandem_demo.sh
+```
+
+If the buzzer is silent in tandem mode, your hardware may want `active` instead of `passive`:
+
+```bash
+cd ~/TrashformerPro
+TRASHFORMER_RUNTIME_BUZZER_MODE=active bash scripts/pi/start_tandem_demo.sh
 ```
 
 That launches:

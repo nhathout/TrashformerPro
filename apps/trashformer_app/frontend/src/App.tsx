@@ -227,7 +227,7 @@ const App: React.FC = () => {
             </div>
 
             <p className="text-xs text-muted-foreground font-medium">
-              &copy; 2026 Trashformer AI Systems. All rights reserved.
+              &copy; 2026 TrashformerPro. All rights reserved.
             </p>
           </div>
         </footer>

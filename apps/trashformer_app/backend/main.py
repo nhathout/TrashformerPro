@@ -341,7 +341,7 @@ def _build_runtime_config(**args: Any) -> RuntimeConfig:
 
     classifier_python = Path(str(args.get("classifier_python", DEFAULT_RUNTIME_CLASSIFIER_PYTHON)))
     drive_outputs = bool(args.get("drive_outputs", False))
-    hardware_buzzer_mode = str(args.get("hardware_buzzer_mode", "passive"))
+    hardware_buzzer_mode = str(args.get("hardware_buzzer_mode", os.getenv("TRASHFORMER_RUNTIME_BUZZER_MODE", "passive")))
 
     return RuntimeConfig(
         checkpoint_path=_resolve_checkpoint_path(),

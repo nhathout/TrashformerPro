@@ -1,12 +1,14 @@
 # Trashformer App
 
-`apps/trashformer_app` contains:
+`apps/trashformer_app` contains the web interface for TrashformerPro:
 
-- a React / Vite frontend
-- a FastAPI backend
-- the Pi live runtime controls used by the `Live Monitor` tab
+- React / Vite frontend
+- FastAPI backend
+- upload classification
+- model status, history, and insights
+- Pi `Live Monitor` for the shared runtime
 
-Backend endpoints:
+## Backend Endpoints
 
 - `POST /data`
 - `POST /data/stream`
@@ -14,31 +16,31 @@ Backend endpoints:
 
 ## What Works Without The Pi
 
-The website is intentionally usable without robot hardware.
-
-These features work on Mac, Linux, or any machine with the backend dependencies:
+These features work on a normal laptop or desktop when the backend dependencies are installed:
 
 - upload classification
 - model status
 - history
 - insights
 
-If the backend is not running on a Pi with camera access, the app stays in `Upload / Website Mode Only` and disables `Live Monitor` cleanly.
+If the backend is not running on a Pi with camera access, the app stays in website-only mode and disables `Live Monitor`.
 
-## What Is Pi-Only
+## Pi-Only Features
 
 `Live Monitor` depends on the backend host having:
 
 - `rpicam-still`
-- a captured `runtime/calibration/empty_plate.jpg`
-- a usable checkpoint such as `models/best.pt`
+- `runtime/calibration/empty_plate.jpg`
+- a checkpoint such as `models/best.pt`
 
-Optional Pi-only hardware features:
+Optional Pi hardware outputs:
 
-- LED output
-- buzzer output
+- LEDs
+- buzzer
 
-## Local App Run
+The motorized tilt mechanism is not part of the final app behavior. It is future work after motor hardware and safety checks are added.
+
+## Local Backend
 
 From the repo root:
 
@@ -49,24 +51,24 @@ pip install -r apps/trashformer_app/backend/requirements.txt
 python apps/trashformer_app/backend/server.py
 ```
 
-Optional real-model inference for upload classification:
+Optional real-model inference for uploads:
 
 ```bash
 pip install -r apps/trashformer_app/backend/requirements-inference.txt
 ```
 
-Then either:
+Then either place a checkpoint at `models/best.pt` or set:
 
-- put a checkpoint at `models/best.pt`, or
-- set `TRASHFORMER_CHECKPOINT=/absolute/path/to/best.pt`
+```bash
+export TRASHFORMER_CHECKPOINT=/absolute/path/to/best.pt
+```
 
-If no checkpoint is available, upload classification still works in deterministic demo mode.
+If no checkpoint is available, upload classification still runs in deterministic demo mode.
 
 ## Frontend Development
 
-From `apps/trashformer_app/frontend`:
-
 ```bash
+cd apps/trashformer_app/frontend
 npm install
 npm run dev
 ```
@@ -88,53 +90,43 @@ npm run build
 cd ../../..
 ```
 
-Then run the backend:
+Run the backend:
 
 ```bash
 source .venv-trashformer/bin/activate
 python apps/trashformer_app/backend/server.py
 ```
 
-If `apps/trashformer_app/frontend/dist` exists, the backend serves the built frontend and API from the same origin.
+If `apps/trashformer_app/frontend/dist` exists, the backend serves the frontend and API from the same origin.
 
 ## Live Monitor Behavior
 
-The app `Live Monitor` now controls a shared Pi runtime instead of running its own separate snapshot logic.
+The `Live Monitor` uses the same Pi runtime state machine as `scripts/pi/full_system_runner.py`.
 
-That runtime:
+The runtime:
 
-- captures a fresh blank reference on tandem-demo startup unless you disable that in the launcher
-- captures the latest frame from the Pi camera
-- performs a blank-reference foreground check against `runtime/calibration/empty_plate.jpg`
-- crops around the detected foreground object before running the classifier
-- distinguishes:
-  - `standby`
-  - `tracking`
-  - `classified`
-  - `scene_error`
-  - `degraded`
-- lights all class LEDs during the tracking / classifying window when hardware mirroring is enabled
-- requires a `2.0 s` stable hold before classification
-- can optionally mirror the same runtime state to the Pi LEDs and buzzer
-- archives classification-attempt frames into `runtime/captures/`
-- writes classification attempts to `runtime/inference_records/predictions.csv`
-- only shows the locked-class popup when a prediction passes the active confidence threshold
-- lights the guessed class LED after low-confidence attempts, but skips the popup and category sound
-- returns to `standby` after low-confidence attempts while still exposing the low-confidence result in the status cards
+- captures or uses an empty-plate reference
+- captures live camera frames
+- checks for a staged foreground object
+- waits for the object to remain stable
+- classifies the cropped object
+- optionally mirrors state to Pi LEDs and buzzer
+- archives classification-attempt frames
+- writes prediction records to `runtime/inference_records/predictions.csv`
 
-Important:
+Runtime states shown by the app:
 
-- the app can run without the robot
-- the robot can run without the app
-- the recommended demo mode is to run the backend with the runtime already active, then use the web app as a real-time mirror of that same runtime
-- do not run `scripts/pi/full_system_runner.py` at the same time as the app live runtime
-- live image frames are only encoded and sent when the `Live Monitor` view is actually polling for them
+- `standby`
+- `tracking`
+- `classified`
+- `scene_error`
+- `degraded`
 
-## Recommended Pi Demo Flow
+Only one runtime should own the Pi camera. Do not run `scripts/pi/full_system_runner.py` while the app live runtime is active.
 
-Use this when the backend runs on the Pi and you view the app from your Mac.
+## Recommended Pi Demo
 
-### On The Pi
+On the Pi:
 
 ```bash
 cd ~/TrashformerPro
@@ -142,7 +134,7 @@ source .venv/bin/activate
 pip install -r apps/trashformer_app/backend/requirements-inference.txt
 ```
 
-If the frontend has not been built on that Pi yet, or frontend code changed:
+Build the frontend if needed:
 
 ```bash
 cd apps/trashformer_app/frontend
@@ -157,79 +149,33 @@ Confirm the checkpoint:
 ls -lh models/best.pt
 ```
 
-If you want to refresh the blank reference manually:
-
-```bash
-/usr/bin/python3 scripts/pi/capture_empty_reference.py
-```
-
-Start the default tandem mode:
+Start tandem mode:
 
 ```bash
 bash scripts/pi/start_tandem_demo.sh
 ```
 
-If your buzzer stays silent in tandem mode, retry with:
+If the buzzer hardware uses active mode:
 
 ```bash
 TRASHFORMER_RUNTIME_BUZZER_MODE=active bash scripts/pi/start_tandem_demo.sh
 ```
 
-This starts:
-
-- the backend server
-- the shared Pi runtime
-- hardware outputs enabled by default
-- a fresh empty-plate calibration capture before runtime startup
-
-Robot-only fallback:
-
-```bash
-/usr/bin/python3 scripts/pi/full_system_runner.py \
-  --checkpoint models/best.pt \
-  --classifier-python .venv/bin/python \
-  --buzzer-mode passive
-```
-
-### On Your Mac
-
-Check health:
-
-```bash
-curl http://<pi-ip>:8000/health
-```
-
-Check model status:
-
-```bash
-curl -X POST http://<pi-ip>:8000/data \
-  -H "Content-Type: application/json" \
-  -d '{"func":"get_model_status","args":{}}'
-```
-
-Open:
+From another machine on the same network:
 
 ```text
 http://<pi-ip>:8000
 ```
 
-Inside the app:
+Health check:
 
-1. open `Live Monitor`
-2. confirm the runtime is already active
-3. leave `Mirror Pi LEDs + buzzer` enabled if you want the app to keep mirroring hardware state
+```bash
+curl http://<pi-ip>:8000/health
+```
 
-The app backend then owns:
+## Session Restart
 
-- the Pi camera
-- the `2.0 s` stability gate
-- classification
-- optional LED / buzzer outputs
-- the current runtime state whether or not the browser is open
-
-## Start Another Session After Reboot
-
-On the Pi:
+After a Pi reboot:
 
 ```bash
 cd ~/TrashformerPro
@@ -237,25 +183,14 @@ source .venv/bin/activate
 ls -lh models/best.pt
 ```
 
-Rebuild the frontend only if it changed:
-
-```bash
-cd apps/trashformer_app/frontend
-npm install
-npm run build
-cd ../../..
-```
-
-Recapture the blank reference if the camera, lighting, plate, or framing changed:
+Recapture the blank reference if camera, lighting, plate, or framing changed:
 
 ```bash
 /usr/bin/python3 scripts/pi/capture_empty_reference.py
 ```
 
-Start the default tandem mode:
+Start:
 
 ```bash
 bash scripts/pi/start_tandem_demo.sh
 ```
-
-On your Mac, hard refresh the browser if the UI does not look current.

@@ -1,52 +1,53 @@
 # Pi Runtime Guide
 
-## What Lives Here
+This folder contains Raspberry Pi setup, calibration, hardware checks, and runtime launch scripts.
 
-- `scripts/pi/setup_pi.sh`: installs Pi-side packages and creates runtime folders
-- `scripts/pi/capture_empty_reference.py`: captures the calibrated empty plate image
-- `scripts/pi/full_system_runner.py`: robot-only CLI wrapper around the shared Pi runtime
-- `scripts/pi/run_hardware_action.py`: one-shot LED/buzzer helper
-- `scripts/pi/test_cam.sh`: camera smoke test
-- `scripts/pi/test_leds.py`: LED smoke test
-- `scripts/pi/test_buzzer.py`: buzzer smoke test
-- `scripts/pi/test_esp32_serial.py`: optional ESP32 serial test
+## Files
+
+- `setup_pi.sh`: installs Pi-side packages and creates runtime folders
+- `capture_empty_reference.py`: captures the calibrated empty-plate image
+- `full_system_runner.py`: robot-only CLI runtime
+- `start_tandem_demo.sh`: starts the Pi-hosted app and shared runtime
+- `run_hardware_action.py`: one-shot LED/buzzer helper
+- `test_cam.sh`: camera smoke test
+- `test_leds.py`: LED smoke test
+- `test_buzzer.py`: buzzer smoke test
+- `test_esp32_serial.py`: optional ESP32 serial test
 
 ## Runtime Modes
 
-TrashformerPro now has one shared Pi runtime state machine with a `2.0 s` stable hold and three supported ways to use it:
+Robot-only:
 
-1. `Robot-only`
-   Run `scripts/pi/full_system_runner.py`. No website required.
-2. `App-only`
-   Run the website on any machine. Upload/history/insights work without Pi hardware.
-3. `Tandem Pi demo`
-   Run the app backend on the Pi with the shared runtime already active, and use the web app as a real-time mirror of the same LED / buzzer / classification state.
+- run `scripts/pi/full_system_runner.py`
+- no website required
 
-Important:
+App-only:
 
-- only one live Pi runtime may own the camera at a time
-- do not run `full_system_runner.py` while the Pi app backend live runtime is active
-- if you want app + hardware together, use the app `Live Monitor` with hardware mirroring enabled
+- run the web app without Pi hardware
+- upload, history, and insights still work
 
-## One-Time Pi Setup
+Tandem Pi demo:
 
-From the repo root on the Pi:
+- run the backend and shared Pi runtime on the Pi
+- use the web app as a live view of the same runtime driving LEDs and buzzer
+
+Only one live runtime should own the Pi camera. Do not run `full_system_runner.py` while the app live runtime is active.
+
+## One-Time Setup
 
 ```bash
 cd ~/TrashformerPro
 bash scripts/pi/setup_pi.sh
 ```
 
-That prepares:
+This prepares:
 
 - `runtime/calibration/`
 - `runtime/captures/`
 - `runtime/inference_records/`
 - `runtime/logs/`
 
-## Starting A New Pi Session After Reboot
-
-From the repo root on the Pi:
+## Session Startup After Reboot
 
 ```bash
 cd ~/TrashformerPro
@@ -54,108 +55,57 @@ source .venv/bin/activate
 ls -lh models/best.pt
 ```
 
-If you pulled changes that affect packages or hardware dependencies, rerun:
-
-```bash
-bash scripts/pi/setup_pi.sh
-source .venv/bin/activate
-```
-
-Recapture `runtime/calibration/empty_plate.jpg` whenever any of these changed:
-
-- camera angle
-- camera height
-- lighting
-- plate position
-- background / framing
+Recapture the empty reference when the camera, plate, lighting, or background changes:
 
 ```bash
 /usr/bin/python3 scripts/pi/capture_empty_reference.py
 ```
 
-Then choose either:
-
-- robot-only CLI runtime from this README
-- Pi-hosted app runtime from [apps/trashformer_app/README.md](/Users/noahhathout/Desktop/Work/Grad%20School/SE740/TrashformerPro/apps/trashformer_app/README.md)
-
-For most demos, tandem mode is now the default path.
-
-## Python Usage On The Pi
+## Python Split On The Pi
 
 Use `/usr/bin/python3` for GPIO-facing scripts in `scripts/pi/`.
 
-Reason:
+Use `.venv/bin/python` for classifier inference.
 
-- `setup_pi.sh` installs `gpiozero` and serial tooling for the system Python
-- the classifier itself still runs from `.venv/bin/python`
-
-The normal split is:
+The full runtime does both:
 
 - hardware entrypoint: `/usr/bin/python3`
 - classifier subprocess: `.venv/bin/python`
 
-## Quick Hardware Checks
+## Hardware Checks
 
-### Camera
+Camera:
 
 ```bash
 bash scripts/pi/test_cam.sh
 ```
 
-### LEDs
+LEDs:
 
 ```bash
 /usr/bin/python3 scripts/pi/test_leds.py --cycles 1 --hold-seconds 1.0
 ```
 
-Default GPIO map:
+Default LED map:
 
 - `plastic`: `GPIO17` / physical pin `11`
 - `paper_cardboard`: `GPIO27` / physical pin `13`
 - `metal_glass`: `GPIO22` / physical pin `15`
 - `trash_other`: `GPIO23` / physical pin `16`
 
-### Buzzer
-
-Active buzzer:
-
-```bash
-/usr/bin/python3 scripts/pi/test_buzzer.py --mode active
-```
-
-Passive piezo buzzer:
+Buzzer:
 
 ```bash
 /usr/bin/python3 scripts/pi/test_buzzer.py --mode passive
 ```
 
+Use `--mode active` for an active buzzer.
+
 Default buzzer pin:
 
 - `GPIO24` / physical pin `18`
 
-## Blank Reference Calibration
-
-Capture the empty plate with normal lighting and the final framing:
-
-```bash
-/usr/bin/python3 scripts/pi/capture_empty_reference.py
-```
-
-This creates:
-
-```text
-runtime/calibration/empty_plate.jpg
-```
-
-The shared runtime uses that image for:
-
-- blank-reference foreground checking
-- center-object presence gating
-- border-region plate / framing mismatch detection
-
 ## Robot-Only Runtime
-
-Run the physical system without the website:
 
 ```bash
 /usr/bin/python3 scripts/pi/full_system_runner.py \
@@ -167,45 +117,15 @@ Run the physical system without the website:
   --min-confidence 0.60
 ```
 
-If you use an active buzzer instead:
-
-```bash
-/usr/bin/python3 scripts/pi/full_system_runner.py \
-  --checkpoint models/best.pt \
-  --classifier-python .venv/bin/python \
-  --buzzer-mode active \
-  --stable-hold-seconds 2.0 \
-  --standby-reminder-seconds 20 \
-  --min-confidence 0.60
-```
-
-What the runtime does:
-
-- captures `empty_plate.jpg` during tandem-demo startup, or uses the existing calibration image for robot-only mode
-- plays the boot sound and lights all LEDs briefly when hardware outputs are enabled
-- captures the latest live frame
-- compares it to `empty_plate.jpg` after grayscale + blur preprocessing
-- checks for a valid core foreground object in the plate center
-- if no core object is found, checks for a border-region plate / framing mismatch
-- waits `2.0 s` for the same object to stay stable
-- crops around the detected object and classifies with `models/best.pt`
-- logs runtime events and archives classification-attempt frames
+Use `--buzzer-mode active` if needed.
 
 Runtime states:
 
 - `standby`: empty plate or no object
-- `tracking`: object present but still within the `2.0 s` hold window, with all class LEDs lit
-- `classified`: confident prediction, with the winning class LED held until the next state change
-- `low_confidence` is recorded internally, but the runtime immediately returns to `standby`
-- `scene_error`: plate moved, disappeared, or framing changed too much
-- `degraded`: camera / classifier / runtime problem, with automatic retry
-
-Low-confidence behavior:
-
-- the classifier still archives the frame and logs the prediction attempt
-- the guessed class LED turns on so the hardware mirrors the web-app attempt
-- the buzzer stays silent and the popup stays hidden unless the confidence threshold passed
-- the web app does not show the locked-class popup unless the confidence threshold passed
+- `tracking`: object is present but still inside the stability window
+- `classified`: confident prediction
+- `scene_error`: plate, background, or framing changed too much
+- `degraded`: camera, classifier, or runtime problem with automatic retry
 
 Useful options:
 
@@ -217,47 +137,36 @@ Useful options:
 - `--camera-arg=--timeout --camera-arg=1000`
 - `--once`
 
-Deprecated compatibility note:
+## Tandem Demo Mode
 
-- `--decision-hold-seconds` still works as an alias for `--category-hold-seconds`
-- category LEDs now stay latched until the runtime leaves `classified`, so `--category-hold-seconds` is mostly legacy
-
-## Default Tandem Demo Mode
-
-This is the recommended presentation / demo path because the web app and hardware mirror the same runtime in real time.
-
-Start it on the Pi with:
+This is the preferred final demo path when the Pi hosts the app.
 
 ```bash
 cd ~/TrashformerPro
 bash scripts/pi/start_tandem_demo.sh
 ```
 
-If the buzzer is silent in tandem mode, your hardware may want `active` instead of `passive`:
+If the buzzer is silent and the hardware uses an active buzzer:
 
 ```bash
 cd ~/TrashformerPro
 TRASHFORMER_RUNTIME_BUZZER_MODE=active bash scripts/pi/start_tandem_demo.sh
 ```
 
-That launches:
+The launcher starts:
 
 - the backend server
 - the shared Pi runtime
-- hardware outputs enabled by default
-- an automatic blank-reference capture before the runtime starts
+- hardware outputs
+- an empty-plate calibration capture before runtime startup
 
-The runtime continues running even if the browser is not open. Live image frames are only encoded and sent when the web app `Live Monitor` is actively polling.
-
-From your Mac, open:
+From another machine on the same network:
 
 ```text
 http://<pi-ip>:8000
 ```
 
-Then use `Live Monitor` as the real-time view of the same runtime that is driving LEDs and buzzer.
-
-## Where Runtime Output Goes
+## Runtime Output
 
 Latest live frame:
 
@@ -285,21 +194,11 @@ Runtime event log:
 runtime/logs/full_system_events.jsonl
 ```
 
-Each prediction record includes the checkpoint path and SHA-256 fingerprint used for that inference.
-
-## Copy Captures Back To Your Mac
-
-From your Mac:
-
-```bash
-scp <pi-user>@<pi-host>:~/TrashformerPro/runtime/captures/fullrun_locked_<timestamp>.jpg ~/Downloads/
-```
-
-Or copy the full runtime data for relabeling / fine-tuning:
+## Copy Captures Back For Review
 
 ```bash
 rsync -av <pi-user>@<pi-host>:~/TrashformerPro/runtime/captures/ runtime/captures/
 rsync -av <pi-user>@<pi-host>:~/TrashformerPro/runtime/inference_records/ runtime/inference_records/
 ```
 
-For the relabel + fine-tune loop, see [training/README.md](/Users/noahhathout/Desktop/Work/Grad%20School/SE740/TrashformerPro/training/README.md).
+For relabeling and fine-tuning, see `training/README.md`.

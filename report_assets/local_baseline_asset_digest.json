@@ -1,0 +1,43 @@
+{
+  "created_at_utc": "2026-04-28T20:17:28.266588+00:00",
+  "source_run": "training/runs/20260402_204359_mobilenet_v3_large",
+  "generated_assets": [
+    "baseline_training_curves_standardized_256.png",
+    "baseline_test_confusion_matrix_standardized_256.png",
+    "baseline_per_class_test_metrics_standardized_256.png",
+    "baseline_error_breakdown_standardized_256.png",
+    "baseline_vs_feedback_metrics.png",
+    "source_to_target_mapping_standardized_256.png",
+    "dataset_example_grid_standardized_256.png",
+    "baseline_run_summary_standardized_256.png"
+  ],
+  "baseline": {
+    "model": "mobilenet_v3_large",
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce RTX 4080",
+    "epochs_completed": 10,
+    "best_epoch": 5,
+    "best_val_accuracy": 0.9596290234588107,
+    "test_accuracy": 0.966991341991342,
+    "test_macro_f1": 0.959069086459917,
+    "training_time_seconds": 501.456205368042
+  },
+  "dataset": {
+    "variant": "standardized_256",
+    "train_examples": 8578,
+    "val_examples": 1833,
+    "test_examples": 1848,
+    "overall_target_counts": {
+      "metal_glass": 2666,
+      "paper_cardboard": 2747,
+      "plastic": 1597,
+      "trash_other": 5249
+    }
+  },
+  "per_class_f1": {
+    "metal_glass": 0.9474969474969476,
+    "paper_cardboard": 0.9735576923076924,
+    "plastic": 0.9310344827586207,
+    "trash_other": 0.9841872232764074
+  }
+}

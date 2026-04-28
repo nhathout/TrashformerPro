@@ -1,0 +1,25 @@
+{
+  "plots": [
+    "dataset_distribution_standardized_256.png",
+    "per_class_test_metrics_garlic_feedback_v1.png",
+    "reviewed_runtime_confusion_matrix.png",
+    "runtime_prediction_summary.png",
+    "test_confusion_matrix_garlic_feedback_v1.png",
+    "training_curves_garlic_feedback_v1.png"
+  ],
+  "history_epochs": 8,
+  "best_epoch": 7,
+  "best_val_accuracy": 0.9558342420937841,
+  "test_accuracy": 0.952922077922078,
+  "test_macro_f1": 0.943129328256174,
+  "runtime_rows": 47,
+  "runtime_pred_counts": {
+    "paper_cardboard": 19,
+    "trash_other": 3,
+    "plastic": 9,
+    "metal_glass": 16
+  },
+  "runtime_confirmed_rows": 8,
+  "runtime_confirmed_correct": 2,
+  "feedback_examples_total": 8
+}

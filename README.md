@@ -6,11 +6,7 @@ The final project implementation includes perception, runtime logging, web-app m
 
 ## Demo
 
-Add a screenshot or GIF from the final demo video here:
-
-```text
 ![TrashformerPro final demo](docs/trashpro.gif)
-```
 
 ## Current Scope
 

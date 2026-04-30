@@ -4,8 +4,6 @@ TrashformerPro is a smart waste-sorting prototype. It uses a Raspberry Pi camera
 
 The final project implementation includes perception, runtime logging, web-app monitoring, and non-motor hardware feedback. The physical tilting/motor mechanism was planned but is left as future work.
 
-## Demo
-
 <p align="center">
   <img src="docs/trashpro.gif" alt="TrashformerPro final demo">
 </p>
